@@ -117,8 +117,13 @@ Repo ini berisi dua site. Buat **dua project Netlify** dari repo yang sama, lalu
 
 **Base directory wajib kosong** (root repo). Netlify memasang dependency di root lewat npm
 workspaces, lalu menjalankan build command dari root. Nilai `command`/`publish` sudah ada di
-`apps/*/netlify.toml`; `ignore` di file itu mencegah site ikut rebuild saat app lain berubah.
-`packages/shared` sengaja ikut di `ignore` karena kedua app mengimpornya.
+`apps/*/netlify.toml`.
+
+Kedua `netlify.toml` sengaja **tidak** memakai `ignore`. Sebelumnya ada `ignore` berbasis
+`git diff` untuk mencegah rebuild antar-app, tapi perintah itu rapuh: jika Base directory diisi
+folder app, pathspec `apps/creator` tidak match apa pun, `git diff --quiet` mengembalikan exit 0,
+dan Netlify menganggap tidak ada perubahan sehingga **build dilewati selamanya**. Build ulang
+kedua site jauh lebih murah daripada deploy yang tidak pernah jalan.
 
 ### Node version
 
@@ -130,8 +135,8 @@ memakai default Node 18 akan gagal saat build.
 
 | Gejala | Penyebab | Perbaikan |
 | --- | --- | --- |
+| Build "skipped" terus | `ignore` command mengembalikan exit 0 | Sudah dihapus dari repo ini; kalau site masih skip, cek **Ignore builds** di UI dan kosongkan |
 | `Missing script: "build:creator"` | **Base directory** diisi `apps/creator`/`apps/cms` | Kosongkan Base directory; isi hanya **Package directory** |
 | Build sukses tapi `Deploy failed` / "no publish directory" | `publish` relatif ke base, bukan ke package | `publish` harus `apps/<app>/.next` selama base = root |
-| Build dilewati total padahal ada commit | `ignore` tanpa guard; `$CACHED_COMMIT_REF` kosong pada deploy pertama membuat `git diff` membandingkan working tree dengan HEAD → exit 0 | Gunakan `test -n "$CACHED_COMMIT_REF" && git diff …` (sudah diterapkan) |
 | `Unsupported Node.js version` / error sintaks Next 16 | Node 18 default Netlify | Set `NODE_VERSION=22` (sudah diterapkan) |
 | `Cannot find module '@rupakarsa/shared'` | Install dijalankan di subfolder sehingga workspace tidak ter-link | Biarkan base = root agar `npm install` membaca workspaces |
