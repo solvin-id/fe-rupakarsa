@@ -1,6 +1,6 @@
 [build]
-  command = "npm run build -w @rupakarsa/cms"
-  publish = "apps/cms/.next"
+  command = "npm run build"
+  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "22"
