@@ -108,26 +108,26 @@ kantong tenant terbaca lintas subdomain.
 ## Deploy (Netlify)
 
 Repo ini berisi dua site. Buat **dua project Netlify** dari repo yang sama, lalu di
-**Project configuration → Build settings** isi **Base directory**:
+**Project configuration → Build settings** isi **Package directory**:
 
-| Site | Base directory | Build command | Publish |
-| --- | --- | --- | --- |
-| Creator | `apps/creator` | `npm run build` | `.next` |
-| CMS | `apps/cms` | `npm run build` | `.next` |
+| Site | Base directory | Package directory | Build command | Publish |
+| --- | --- | --- | --- | --- |
+| Creator | *(kosong / `\`)* | `apps/creator` | *(kosong, dari netlify.toml)* | *(kosong, dari netlify.toml)* |
+| CMS | *(kosong / `\`)* | `apps/cms` | *(kosong, dari netlify.toml)* | *(kosong, dari netlify.toml)* |
 
-Nilai `command`/`publish` sudah ada di `apps/*/netlify.toml`, jadi field Build command dan Publish
-directory di UI boleh dikosongkan. **Package directory tidak perlu diisi.**
+Nilai `command`/`publish` sudah ada di `apps/*/netlify.toml`. **Base directory harus tetap root**
+supaya `npm install` membaca npm workspaces dan `packages/shared` ter-link.
 
-**Penting: `publish` bersifat relatif terhadap Base directory.** Karena base = `apps/creator`,
-`publish` harus `.next` — bukan `apps/creator/.next`. Kalau ditulis lengkap, Netlify menempelkannya
-lagi dan mencari `apps/creator/apps/creator/.next`, lalu gagal dengan
-`Your publish directory was not found`.
+**Penting: `publish` bersifat relatif terhadap Base directory.** Karena base = root, `publish`
+harus `apps/creator/.next`. Kalau Base directory diisi `apps/creator`, `publish` harus `.next` —
+kalau ditulis lengkap, Netlify menempelkannya lagi dan mencari
+`apps/creator/apps/creator/.next`, lalu gagal dengan `Your publish directory was not found`.
 
 Kedua `netlify.toml` sengaja **tidak** memakai `ignore`. Sebelumnya ada `ignore` berbasis
-`git diff` untuk mencegah rebuild antar-app, tapi perintah itu rapuh: jika Base directory diisi
-folder app, pathspec `apps/creator` tidak match apa pun, `git diff --quiet` mengembalikan exit 0,
-dan Netlify menganggap tidak ada perubahan sehingga **build dilewati selamanya**. Build ulang
-kedua site jauh lebih murah daripada deploy yang tidak pernah jalan.
+`git diff` untuk mencegah rebuild antar-app, tapi perintah itu rapuh: pathspec tidak match,
+`git diff --quiet` mengembalikan exit 0, dan Netlify menganggap tidak ada perubahan sehingga
+**build dilewati selamanya**. Build ulang kedua site jauh lebih murah daripada deploy yang tidak
+pernah jalan.
 
 ### Node version
 
@@ -139,8 +139,10 @@ memakai default Node 18 akan gagal saat build.
 
 | Gejala | Penyebab | Perbaikan |
 | --- | --- | --- |
-| Build "skipped" terus | `ignore` command mengembalikan exit 0 | Sudah dihapus dari repo ini; kalau site masih skip, cek **Ignore builds** di UI dan kosongkan |
-| `Your publish directory was not found at .../apps/creator/apps/creator/.next` | `publish` ditulis lengkap padahal Base directory sudah `apps/creator` | `publish` harus `.next` (relatif ke base) |
-| `Missing script: "build:creator"` | Build command memakai script root padahal base = folder app | Pakai `npm run build` (script milik app) |
+| Deploy berstatus **skipped** dengan keterangan `Skipped due to account credit usage exceeded` | Kredit tim Netlify habis untuk siklus billing ini; production deploy dijeda | Upgrade tim atau tunggu siklus berikutnya — bukan masalah konfigurasi |
+| Deploy skipped tanpa keterangan kredit | `ignore` command atau field **Ignore builds** di UI | `ignore` sudah dihapus dari repo; kosongkan field Ignore builds di UI |
+| `Your publish directory was not found at .../apps/creator/apps/creator/.next` | `publish` ditulis lengkap padahal Base directory sudah `apps/creator` | Samakan: base root → `publish = apps/creator/.next`; base app → `publish = .next` |
+| Build berjalan tapi tidak ada config yang terbaca | Base = root dan Package directory kosong, sehingga `apps/*/netlify.toml` tidak ditemukan | Isi **Package directory** dengan `apps/creator` / `apps/cms` |
+| `Missing script: "build:creator"` | Build command memakai script root padahal base = folder app | Pakai `npm run build -w @rupakarsa/creator` hanya bila base = root |
 | `Unsupported Node.js version` / error sintaks Next 16 | Node 18 default Netlify | Set `NODE_VERSION=22` (sudah diterapkan) |
-| `Cannot find module '@rupakarsa/shared'` | Install dijalankan tanpa membaca workspaces | Pastikan Base directory = `apps/<app>` dan repo root tetap punya `package.json` workspaces |
+| `Cannot find module '@rupakarsa/shared'` | Install dijalankan tanpa membaca workspaces | Pastikan Base directory tetap root |
