@@ -204,7 +204,8 @@ Catatan:
 
 2. **Request Access (`/request-access`, publik)**
    * Form: nama, tenant/perusahaan, email, WhatsApp, kebutuhan.
-   * Validasi: nama ≥ 2 karakter, email valid, WhatsApp 8–15 digit.
+   * Validasi form: nama dan tenant ≥ 2 karakter, email valid, WhatsApp ≥ 8 digit. Nomor admin
+     yang disimpan di CMS dibatasi 8–15 digit.
    * Saat dikirim, browser membuka `https://wa.me/<nomor-admin>?text=<pesan terisi>`.
    * Nomor admin diambil dari Settings CMS. Jika belum diisi, submit dinonaktifkan dan halaman
      menampilkan email admin sebagai jalur cadangan.
