@@ -1,0 +1,30 @@
+{
+  "name": "rupakarsa",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Rupakarsa — AI production workspace with separate Creator and CMS surfaces",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:creator": "npm run dev -w @rupakarsa/creator",
+    "dev:cms": "npm run dev -w @rupakarsa/cms",
+    "build": "npm run build:creator && npm run build:cms",
+    "build:creator": "npm run build -w @rupakarsa/creator",
+    "build:cms": "npm run build -w @rupakarsa/cms",
+    "lint": "npm run lint -w @rupakarsa/creator && npm run lint -w @rupakarsa/cms",
+    "typecheck": "npm run typecheck -w @rupakarsa/creator && npm run typecheck -w @rupakarsa/cms",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
+    "@vitejs/plugin-react": "^6.2.1",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.9.3",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^5.1.0"
+  }
+}

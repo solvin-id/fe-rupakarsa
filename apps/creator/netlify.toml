@@ -1,0 +1,7 @@
+[build]
+  command = "npm run build:creator"
+  publish = "apps/creator/.next"
+  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- apps/creator packages/shared"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

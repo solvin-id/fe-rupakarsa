@@ -1,0 +1,13 @@
+node_modules/
+.next/
+out/
+dist/
+coverage/
+.env
+.env*.local
+.netlify/
+*.tsbuildinfo
+next-env.d.ts
+
+# Artefak demo lokal (video/gambar hasil generate), bukan source
+Movie/

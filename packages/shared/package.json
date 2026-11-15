@@ -1,0 +1,23 @@
+{
+  "name": "@rupakarsa/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./ui": "./src/components/ui/index.ts",
+    "./brand": "./src/components/brand/index.ts",
+    "./auth": "./src/components/auth/index.ts",
+    "./surface": "./src/components/surface/index.ts",
+    "./lib": "./src/lib/index.ts",
+    "./lib/*": "./src/lib/*.ts",
+    "./lib/utils/*": "./src/lib/utils/*.ts",
+    "./stores/*": "./src/stores/*.ts",
+    "./theme.css": "./src/styles/theme.css"
+  },
+  "peerDependencies": {
+    "next": ">=16",
+    "react": ">=19",
+    "react-dom": ">=19",
+    "zustand": ">=5"
+  }
+}
