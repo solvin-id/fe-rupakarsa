@@ -66,6 +66,13 @@ Alur request akses:
 2. Calon tenant membuka `/request-access`, mengisi form, lalu menekan **Kirim via WhatsApp**.
 3. WhatsApp terbuka dengan pesan yang sudah terisi (nama, tenant, email, WhatsApp, kebutuhan).
 
+## Dokumentasi
+
+| Folder | Isi |
+| --- | --- |
+| `Requirement/` | PRD aktif (v2.1) — acuan produk & kontrak API untuk tim backend |
+| `Rules/` | Aturan engineering (v2.1, historis) — bagian integrasi provider masih berlaku |
+
 ## Perintah
 
 ```bash
