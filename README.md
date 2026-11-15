@@ -112,10 +112,26 @@ Repo ini berisi dua site. Buat **dua project Netlify** dari repo yang sama, lalu
 
 | Site | Package directory | Build command | Publish |
 | --- | --- | --- | --- |
-| Creator | `apps/creator` | `npm run build:creator` | `apps/creator/.next` |
-| CMS | `apps/cms` | `npm run build:cms` | `apps/cms/.next` |
+| Creator | `apps/creator` | `npm run build -w @rupakarsa/creator` | `apps/creator/.next` |
+| CMS | `apps/cms` | `npm run build -w @rupakarsa/cms` | `apps/cms/.next` |
 
-**Base directory dibiarkan kosong** (root repo). Netlify memasang dependency di root lewat npm
+**Base directory wajib kosong** (root repo). Netlify memasang dependency di root lewat npm
 workspaces, lalu menjalankan build command dari root. Nilai `command`/`publish` sudah ada di
 `apps/*/netlify.toml`; `ignore` di file itu mencegah site ikut rebuild saat app lain berubah.
 `packages/shared` sengaja ikut di `ignore` karena kedua app mengimpornya.
+
+### Node version
+
+Next 16 membutuhkan Node **≥ 20.9**. Repo menetapkan Node 22 lewat `.nvmrc` dan
+`[build.environment] NODE_VERSION = "22"` di kedua `netlify.toml`. Tanpa ini, site lama yang masih
+memakai default Node 18 akan gagal saat build.
+
+### Penyebab umum gagal deploy
+
+| Gejala | Penyebab | Perbaikan |
+| --- | --- | --- |
+| `Missing script: "build:creator"` | **Base directory** diisi `apps/creator`/`apps/cms` | Kosongkan Base directory; isi hanya **Package directory** |
+| Build sukses tapi `Deploy failed` / "no publish directory" | `publish` relatif ke base, bukan ke package | `publish` harus `apps/<app>/.next` selama base = root |
+| Build dilewati total padahal ada commit | `ignore` tanpa guard; `$CACHED_COMMIT_REF` kosong pada deploy pertama membuat `git diff` membandingkan working tree dengan HEAD → exit 0 | Gunakan `test -n "$CACHED_COMMIT_REF" && git diff …` (sudah diterapkan) |
+| `Unsupported Node.js version` / error sintaks Next 16 | Node 18 default Netlify | Set `NODE_VERSION=22` (sudah diterapkan) |
+| `Cannot find module '@rupakarsa/shared'` | Install dijalankan di subfolder sehingga workspace tidak ter-link | Biarkan base = root agar `npm install` membaca workspaces |
