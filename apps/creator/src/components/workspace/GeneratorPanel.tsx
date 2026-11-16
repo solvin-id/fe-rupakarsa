@@ -20,8 +20,8 @@ export interface GeneratorPanelProps {
   onResolutionChange: (value: string) => void;
   aspectRatio: string;
   onAspectRatioChange: (value: string) => void;
-  referenceFile: ReferenceFile | null;
-  onReferenceChange: (file: ReferenceFile | null) => void;
+  referenceFiles: ReferenceFile[];
+  onReferenceChange: (files: ReferenceFile[]) => void;
   balance: number;
   onError: (message: string) => void;
   disabled?: boolean;
@@ -39,7 +39,7 @@ export function GeneratorPanel({
   onResolutionChange,
   aspectRatio,
   onAspectRatioChange,
-  referenceFile,
+  referenceFiles,
   onReferenceChange,
   balance,
   onError,
@@ -169,7 +169,7 @@ export function GeneratorPanel({
         <p className="mono-label text-muted">Gambar referensi</p>
         <div className="mt-2">
           <AssetDropzone
-            file={referenceFile}
+            files={referenceFiles}
             onChange={onReferenceChange}
             disabled={disabled}
             onError={onError}

@@ -61,7 +61,7 @@ export function StudioView({ folderId }: { folderId: string }) {
   const [direction, setDirection] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [planState, setPlanState] = useState<"idle" | "planning" | "ready">("idle");
-  const [referenceFile, setReferenceFile] = useState<ReferenceFile | null>(null);
+  const [referenceFiles, setReferenceFiles] = useState<ReferenceFile[]>([]);
   const [simulateFailure, setSimulateFailure] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [detailTarget, setDetailTarget] = useState<Generation | null>(null);
@@ -164,7 +164,7 @@ export function StudioView({ folderId }: { folderId: string }) {
         durationSec: effectiveDuration,
         resolution: effectiveResolution,
         aspectRatio: effectiveAspect,
-        hasReference: Boolean(referenceFile),
+        hasReference: referenceFiles.length > 0,
       });
       setPlannedPrompt(blueprint.prompt);
       setDirection(blueprint.direction);
@@ -206,7 +206,8 @@ export function StudioView({ folderId }: { folderId: string }) {
       mediaType: model.mediaType,
       rawPrompt: rawPrompt.trim(),
       plannedPrompt: plannedPrompt.trim(),
-      referenceImageUrl: referenceFile?.name ?? null,
+      referenceImageUrl:
+        referenceFiles.length > 0 ? referenceFiles.map((file) => file.name).join(", ") : null,
       selectedParams: {
         durationSec: model.mediaType === "VIDEO" ? effectiveDuration : undefined,
         resolution: effectiveResolution,
@@ -350,8 +351,8 @@ export function StudioView({ folderId }: { folderId: string }) {
             onResolutionChange={setResolution}
             aspectRatio={effectiveAspect}
             onAspectRatioChange={setAspectRatio}
-            referenceFile={referenceFile}
-            onReferenceChange={setReferenceFile}
+            referenceFiles={referenceFiles}
+            onReferenceChange={setReferenceFiles}
             balance={session?.workspace.tokenBalance ?? 0}
             onError={(message) => pushToast("error", message)}
             disabled={Boolean(activeJobId)}
