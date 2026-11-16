@@ -5,11 +5,13 @@ import {
   ChevronRight,
   CircleDollarSign,
   FolderKanban,
+  FolderOpen,
   KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
   ShieldAlert,
+  ShieldCheck,
   Sparkles,
   X,
 } from "lucide-react";
@@ -27,6 +29,7 @@ import { SurfaceSwitcher } from "@rupakarsa/shared/surface";
 import { Button, ToastViewport } from "@rupakarsa/shared/ui";
 
 import { ChangePasswordDialog } from "@/components/app/ChangePasswordDialog";
+import { TopUpDialog } from "@/components/workspace/TopUpDialog";
 import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
 
 const CREATOR_URL = process.env.NEXT_PUBLIC_CREATOR_URL ?? "http://localhost:3000";
@@ -35,6 +38,8 @@ const CMS_URL = process.env.NEXT_PUBLIC_CMS_URL ?? "http://localhost:3001";
 const USER_NAV = [
   { href: "/app/workspaces", label: "Workspace", icon: Building2 },
   { href: "/app/projects", label: "Proyek", icon: FolderKanban },
+  { href: "/app/storage", label: "Penyimpanan", icon: FolderOpen },
+  { href: "/app/security", label: "Keamanan", icon: ShieldCheck },
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -53,6 +58,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [topUpOpen, setTopUpOpen] = useState(false);
 
   const session = sessionQuery.data ?? null;
   const signedOut = sessionQuery.isError || sessionQuery.data === null;
@@ -89,7 +95,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   }
 
   function handleTopUp(): void {
-    pushToast("info", "Top-up token dilakukan oleh tim Rupakarsa melalui CMS.");
+    setTopUpOpen(true);
   }
 
   if (!workspace.isActive) {
@@ -310,6 +316,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       </div>
 
       <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
+      <TopUpDialog open={topUpOpen} onClose={() => setTopUpOpen(false)} />
       <ToastViewport />
     </div>
   );

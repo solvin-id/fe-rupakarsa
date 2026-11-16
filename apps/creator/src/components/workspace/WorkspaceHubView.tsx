@@ -26,16 +26,20 @@ import {
   useRemoveMemberMutation,
   useRenameWorkspaceMutation,
   useRequestJoinMutation,
+  useConnectWorkspaceDriveMutation,
+  useDisconnectWorkspaceDriveMutation,
+  useTestWorkspaceDriveMutation,
   useUpdateMemberRoleMutation,
+  useWorkspaceDriveQuery,
   useWorkspaceMembersQuery,
   useWorkspacesQuery,
 } from "@rupakarsa/shared/hooks/use-workspaces";
 import { canManageWorkspace, isWorkspaceOwner } from "@rupakarsa/shared/lib/auth";
-import { formatTokens, formatWorkspaceRole } from "@rupakarsa/shared/lib/format";
+import { formatDate, formatTokens, formatWorkspaceRole } from "@rupakarsa/shared/lib/format";
 import { slugify } from "@rupakarsa/shared/lib/slug";
 import type { JoinRequestStatus, Workspace } from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
-import { Button, Dialog, Field, TextInput } from "@rupakarsa/shared/ui";
+import { Button, Dialog, Field, TextArea, TextInput } from "@rupakarsa/shared/ui";
 
 const STATUS_STYLE: Record<JoinRequestStatus, string> = {
   PENDING: "bg-accent-soft text-accent-strong",
@@ -731,6 +735,10 @@ export function WorkspaceHubView() {
               </div>
             ) : null}
 
+            {canManageWorkspace(actorRole) ? (
+              <WorkspaceDriveSection workspaceId={manageWorkspace.id} />
+            ) : null}
+
             {isWorkspaceOwner(actorRole) ? (
               <div className="rounded-2xl border border-danger/20 bg-danger/5 px-4 py-3">
                 <p className="flex items-center gap-1.5 text-xs font-medium text-danger">
@@ -803,6 +811,166 @@ export function WorkspaceHubView() {
             />
           </Field>
         </div>
+      </Dialog>
+    </div>
+  );
+}
+
+function WorkspaceDriveSection({ workspaceId }: { workspaceId: string }) {
+  const driveQuery = useWorkspaceDriveQuery(workspaceId);
+  const connectDrive = useConnectWorkspaceDriveMutation();
+  const disconnectDrive = useDisconnectWorkspaceDriveMutation();
+  const testDrive = useTestWorkspaceDriveMutation();
+  const pushToast = useUiStore((state) => state.pushToast);
+
+  const [serviceAccountEmail, setServiceAccountEmail] = useState("");
+  const [privateKey, setPrivateKey] = useState("");
+  const [folderId, setFolderId] = useState("");
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
+
+  const drive = driveQuery.data;
+
+  function handleConnect(): void {
+    connectDrive.mutate(
+      { workspaceId, serviceAccountEmail, privateKey, folderId },
+      {
+        onSuccess: (result) => {
+          pushToast(result.ok ? "success" : "error", result.message);
+          setPrivateKey("");
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
+  }
+
+  function handleTest(): void {
+    testDrive.mutate(workspaceId, {
+      onSuccess: (result) => pushToast(result.ok ? "success" : "error", result.message),
+      onError: (error) => pushToast("error", error.message),
+    });
+  }
+
+  function handleDisconnect(): void {
+    disconnectDrive.mutate(workspaceId, {
+      onSuccess: () => {
+        setConfirmDisconnect(false);
+        pushToast("success", "Google Drive diputus. Aset baru memakai storage default.");
+      },
+      onError: (error) => pushToast("error", error.message),
+    });
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface-2/40 px-4 py-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="mono-label text-[9px] text-muted">Google Drive</p>
+        <span
+          className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${
+            drive?.connected ? "bg-success/10 text-success" : "bg-white text-muted"
+          }`}
+        >
+          {drive?.connected ? "Terhubung" : "Belum terhubung"}
+        </span>
+      </div>
+
+      {driveQuery.isPending ? (
+        <p className="mt-2 text-[11px] text-muted">Memuat status Drive…</p>
+      ) : drive?.connected ? (
+        <div className="mt-2 flex flex-col gap-2">
+          <p className="text-[11px] leading-relaxed text-muted">
+            Semua lampiran dan hasil render workspace ini disimpan di Drive.
+            <br />
+            <span className="font-mono text-[10px] text-ink">{drive.serviceAccountEmail}</span>
+            <br />
+            Folder: <span className="font-mono text-[10px] text-ink">{drive.folderId}</span>
+            <br />
+            Terhubung sejak {formatDate(drive.connectedAt)}
+          </p>
+          {drive.lastError ? (
+            <p className="rounded-lg border border-danger/20 bg-danger/5 px-2 py-1.5 text-[10px] text-danger">
+              {drive.lastError}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-1.5">
+            <Button size="sm" variant="secondary" loading={testDrive.isPending} onClick={handleTest}>
+              Uji koneksi
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirmDisconnect(true)}>
+              Putuskan
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2 flex flex-col gap-2">
+          <Field label="Email service account" htmlFor="drive-email">
+            <TextInput
+              id="drive-email"
+              value={serviceAccountEmail}
+              onChange={(event) => setServiceAccountEmail(event.target.value)}
+              placeholder="rupakarsa@project.iam.gserviceaccount.com"
+            />
+          </Field>
+          <Field label="Private key JSON" htmlFor="drive-key">
+            <TextArea
+              id="drive-key"
+              value={privateKey}
+              onChange={(event) => setPrivateKey(event.target.value)}
+              rows={3}
+              placeholder="Tempel isi JSON service account"
+              className="min-h-20 bg-white font-mono text-[10px]"
+            />
+          </Field>
+          <Field label="Folder ID Drive" htmlFor="drive-folder">
+            <TextInput
+              id="drive-folder"
+              value={folderId}
+              onChange={(event) => setFolderId(event.target.value)}
+              placeholder="1AbCdEfGhIjKlMnOpQrStUv"
+            />
+          </Field>
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={connectDrive.isPending}
+            disabled={
+              privateKey.trim().length === 0 ||
+              folderId.trim().length === 0 ||
+              serviceAccountEmail.trim().length === 0
+            }
+            onClick={handleConnect}
+          >
+            Hubungkan Drive
+          </Button>
+          <p className="text-[10px] leading-relaxed text-muted">
+            Bagikan folder Drive ke email service account di atas sebagai Editor.
+          </p>
+          {drive?.lastError ? (
+            <p className="rounded-lg border border-danger/20 bg-danger/5 px-2 py-1.5 text-[10px] text-danger">
+              {drive.lastError}
+            </p>
+          ) : null}
+        </div>
+      )}
+
+      <Dialog
+        open={confirmDisconnect}
+        title="Putuskan Google Drive?"
+        description="Aset baru akan disimpan di storage default setelah diputus."
+        onClose={() => setConfirmDisconnect(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmDisconnect(false)}>
+              Batal
+            </Button>
+            <Button variant="danger" loading={disconnectDrive.isPending} onClick={handleDisconnect}>
+              Putuskan
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted">
+          Aset yang sudah ada tetap berada di Drive workspace. Hanya penyimpanan baru yang berpindah.
+        </p>
       </Dialog>
     </div>
   );
