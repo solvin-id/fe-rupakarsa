@@ -299,10 +299,14 @@ export interface AdminWorkspacesPayload {
 
 export interface WorkspaceDrive {
   connected: boolean;
-  serviceAccountEmail: string;
+  oauthConfigured: boolean;
+  googleEmail: string;
   folderId: string;
+  folderName: string;
+  folderUrl: string;
   connectedAt: string | null;
   lastError: string | null;
+  defaultStorage: { kind: "s3" | "local"; retentionDays: number };
 }
 
 export interface StorageItem {
@@ -348,11 +352,19 @@ export interface StorageSettings {
     forcePathStyle: boolean;
     secretAccessKeyMasked: string;
   };
+  gdrive: {
+    clientId: string;
+    clientSecretMasked: string;
+    redirectUri: string;
+    configured: boolean;
+  };
   workspaces: Array<{
     id: string;
     name: string;
     driveConnected: boolean;
+    googleEmail: string;
     folderIdMasked: string;
+    folderUrl: string;
     lastError: string | null;
     connectedAt: string | null;
   }>;

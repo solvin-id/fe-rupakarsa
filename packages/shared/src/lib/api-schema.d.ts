@@ -1438,63 +1438,7 @@ export interface paths {
                 };
             };
         };
-        put: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: {
-                content: {
-                    "application/json": {
-                        serviceAccountEmail: string;
-                        privateKey: string;
-                        folderId: string;
-                    };
-                };
-            };
-            responses: {
-                /** @description Drive connected */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ProviderTest"];
-                    };
-                };
-                /** @description Invalid service account JSON */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-                /** @description Admin only */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-                /** @description Drive probe failed */
-                502: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorResponse"];
-                    };
-                };
-            };
-        };
+        put?: never;
         post?: never;
         delete: {
             parameters: {
@@ -1525,6 +1469,61 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/workspaces/{id}/storage/drive/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Google consent URL */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DriveStart"];
+                    };
+                };
+                /** @description Admin only */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description OAuth client not configured */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3930,6 +3929,10 @@ export interface paths {
                             publicBaseUrl: string;
                             forcePathStyle: boolean;
                         };
+                        gdrive: {
+                            clientId: string;
+                            clientSecret?: string;
+                        };
                     };
                 };
             };
@@ -4425,10 +4428,21 @@ export interface components {
         };
         WorkspaceDrive: {
             connected: boolean;
-            serviceAccountEmail: string;
+            oauthConfigured: boolean;
+            googleEmail: string;
             folderId: string;
+            folderName: string;
+            folderUrl: string;
             connectedAt: string | null;
             lastError: string | null;
+            defaultStorage: {
+                /** @enum {string} */
+                kind: "s3" | "local";
+                retentionDays: number;
+            };
+        };
+        DriveStart: {
+            url: string;
         };
         ProviderTest: {
             ok: boolean;
@@ -4676,11 +4690,19 @@ export interface components {
                 forcePathStyle: boolean;
                 secretAccessKeyMasked: string;
             };
+            gdrive: {
+                clientId: string;
+                clientSecretMasked: string;
+                redirectUri: string;
+                configured: boolean;
+            };
             workspaces: {
                 id: string;
                 name: string;
                 driveConnected: boolean;
+                googleEmail: string;
                 folderIdMasked: string;
+                folderUrl: string;
                 lastError: string | null;
                 connectedAt: string | null;
             }[];

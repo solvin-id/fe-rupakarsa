@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, HardDrive, Save, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Copy, HardDrive, Save, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -70,6 +70,7 @@ export function StorageView() {
 
       <StorageUsageSummary />
       <StorageForm settings={settings} />
+      <GoogleOAuthForm settings={settings} />
 
       <section className="mt-4 rounded-[1.75rem] border border-border bg-white p-5">
         <div className="flex items-center gap-2">
@@ -84,7 +85,7 @@ export function StorageView() {
           </div>
         </div>
         <p className="mt-2 text-[10px] leading-relaxed text-muted">
-          Kredensial Drive dihubungkan owner/admin lewat modal Kelola workspace di Creator.
+          Aset workspace ber-Drive tidak memakai retensi global.
         </p>
 
         {settings.workspaces.length === 0 ? (
@@ -93,16 +94,17 @@ export function StorageView() {
           </p>
         ) : (
           <div className="mt-4 overflow-hidden rounded-2xl border border-border">
-            <div className="hidden grid-cols-[1.2fr_0.6fr_1fr_1.2fr] gap-3 border-b border-border bg-surface-2/40 px-4 py-2.5 text-[10px] uppercase tracking-[0.14em] text-muted sm:grid">
+            <div className="hidden grid-cols-[1fr_0.6fr_1fr_0.7fr_0.8fr] gap-3 border-b border-border bg-surface-2/40 px-4 py-2.5 text-[10px] uppercase tracking-[0.14em] text-muted sm:grid">
               <span>Workspace</span>
               <span>Status</span>
+              <span>Akun Google</span>
               <span>Folder</span>
-              <span>Error terakhir</span>
+              <span>Terhubung</span>
             </div>
             {settings.workspaces.map((workspace) => (
               <div
                 key={workspace.id}
-                className="grid gap-1 border-b border-border/60 px-4 py-2.5 text-[11px] last:border-b-0 sm:grid-cols-[1.2fr_0.6fr_1fr_1.2fr] sm:items-center sm:gap-3"
+                className="grid gap-1 border-b border-border/60 px-4 py-2.5 text-[11px] last:border-b-0 sm:grid-cols-[1fr_0.6fr_1fr_0.7fr_0.8fr] sm:items-center sm:gap-3"
               >
                 <span className="truncate text-xs font-medium text-ink">{workspace.name}</span>
                 <span
@@ -114,16 +116,31 @@ export function StorageView() {
                 >
                   {workspace.driveConnected ? "Terhubung" : "Belum"}
                 </span>
-                <span className="truncate font-mono text-[10px] text-muted">
-                  {workspace.folderIdMasked || "—"}
+                <span className="truncate text-[10px] text-muted">
+                  {workspace.googleEmail || "—"}
                 </span>
+                {workspace.folderIdMasked ? (
+                  <a
+                    href={workspace.folderUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="truncate font-mono text-[10px] text-accent-strong underline-offset-2 hover:underline"
+                  >
+                    {workspace.folderIdMasked}
+                  </a>
+                ) : (
+                  <span className="truncate font-mono text-[10px] text-muted">—</span>
+                )}
                 <span
                   className={`truncate text-[10px] ${
                     workspace.lastError ? "text-danger" : "text-muted"
                   }`}
                   title={workspace.lastError ?? undefined}
                 >
-                  {workspace.lastError || "—"}
+                  {workspace.lastError ||
+                    (workspace.connectedAt
+                      ? new Date(workspace.connectedAt).toLocaleDateString("id-ID")
+                      : "—")}
                 </span>
               </div>
             ))}
@@ -191,6 +208,8 @@ function StorageForm({ settings }: { settings: StorageSettings }) {
           forcePathStyle,
           secretAccessKey: secretAccessKey.trim() || undefined,
         },
+        // The OAuth client lives in its own card; resend it so saving this form never clears it.
+        gdrive: { clientId: settings.gdrive.clientId, clientSecret: undefined },
       },
       {
         onSuccess: () => {
@@ -375,6 +394,144 @@ function StorageForm({ settings }: { settings: StorageSettings }) {
           <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-accent" aria-hidden />
           Test koneksi memakai konfigurasi yang sudah tersimpan, bukan isian yang belum disimpan.
         </p>
+      </div>
+    </section>
+  );
+}
+
+function GoogleOAuthForm({ settings }: { settings: StorageSettings }) {
+  const updateStorage = useUpdateStorageSettingsMutation();
+  const pushToast = useUiStore((state) => state.pushToast);
+
+  const [clientId, setClientId] = useState(settings.gdrive.clientId);
+  const [clientSecret, setClientSecret] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  function handleSave(): void {
+    updateStorage.mutate(
+      {
+        driver: settings.driver,
+        retentionDays: settings.retentionDays,
+        s3: {
+          endpoint: settings.s3.endpoint,
+          region: settings.s3.region,
+          bucket: settings.s3.bucket,
+          accessKeyId: settings.s3.accessKeyId,
+          publicBaseUrl: settings.s3.publicBaseUrl,
+          forcePathStyle: settings.s3.forcePathStyle,
+          secretAccessKey: undefined,
+        },
+        gdrive: {
+          clientId: clientId.trim(),
+          clientSecret: clientSecret.trim() || undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          setClientSecret("");
+          pushToast("success", "Konfigurasi Google OAuth disimpan.");
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
+  }
+
+  function handleCopy(): void {
+    void navigator.clipboard.writeText(settings.gdrive.redirectUri).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    });
+  }
+
+  return (
+    <section className="card mt-4 p-5 sm:p-6">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <span className="flex size-9 items-center justify-center rounded-xl bg-canvas-2 text-ink">
+            <ShieldCheck className="size-4" aria-hidden />
+          </span>
+          <div>
+            <p className="mono-label text-muted">OAuth client</p>
+            <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-ink">
+              Google Drive (OAuth)
+            </h2>
+          </div>
+        </div>
+        <span
+          className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[9px] font-medium ${
+            settings.gdrive.configured ? "bg-success/10 text-success" : "bg-canvas-2 text-muted"
+          }`}
+        >
+          {settings.gdrive.configured ? "Terhubung" : "Belum dikonfigurasi"}
+        </span>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-4">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Field
+            label="Client ID"
+            htmlFor="gdrive-client-id"
+            hint="Dari OAuth client tipe Web application di Google Cloud."
+          >
+            <TextInput
+              id="gdrive-client-id"
+              value={clientId}
+              onChange={(event) => setClientId(event.target.value)}
+              placeholder="xxxx.apps.googleusercontent.com"
+            />
+          </Field>
+          <Field label="Client Secret" htmlFor="gdrive-client-secret">
+            <TextInput
+              id="gdrive-client-secret"
+              type="password"
+              autoComplete="off"
+              value={clientSecret}
+              onChange={(event) => setClientSecret(event.target.value)}
+              placeholder="Kosongkan untuk mempertahankan"
+            />
+          </Field>
+        </div>
+
+        <Field label="Redirect URI" htmlFor="gdrive-redirect-uri">
+          <div className="flex items-center gap-2">
+            <TextInput
+              id="gdrive-redirect-uri"
+              readOnly
+              value={settings.gdrive.redirectUri}
+              className="font-mono text-[11px]"
+            />
+            <Button
+              variant="secondary"
+              icon={<Copy className="size-4" aria-hidden />}
+              onClick={handleCopy}
+            >
+              {copied ? "Tersalin" : "Salin"}
+            </Button>
+          </div>
+        </Field>
+
+        <p className="text-[10px] leading-relaxed text-muted">
+          Tambahkan Redirect URI di atas ke Authorized redirect URIs pada OAuth client Google Cloud
+          (tipe Web application). Setelah disimpan, setiap workspace menghubungkan Drive lewat layar
+          consent Google.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="primary"
+            loading={updateStorage.isPending}
+            icon={<Save className="size-4" aria-hidden />}
+            onClick={handleSave}
+          >
+            Simpan Google OAuth
+          </Button>
+          {settings.gdrive.clientSecretMasked ? (
+            <span className="text-[10px] text-muted">
+              Secret tersimpan:{" "}
+              <span className="font-mono text-ink">{settings.gdrive.clientSecretMasked}</span>
+            </span>
+          ) : null}
+        </div>
       </div>
     </section>
   );

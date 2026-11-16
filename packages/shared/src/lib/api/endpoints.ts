@@ -149,12 +149,6 @@ export interface StorageFilters {
   limit?: number;
 }
 
-export interface ConnectDriveInput {
-  serviceAccountEmail: string;
-  privateKey: string;
-  folderId: string;
-}
-
 function modelQuery(filters: ModelFilters): string {
   const params = new URLSearchParams();
   if (filters.providerId) params.set("providerId", filters.providerId);
@@ -232,11 +226,10 @@ export const creatorApi = {
 
   workspaceDrive: (workspaceId: string) =>
     apiRequest<WorkspaceDrive>(`/api/creator/workspaces/${workspaceId}/storage/drive`),
-  connectWorkspaceDrive: (workspaceId: string, input: ConnectDriveInput) =>
-    apiRequest<{ ok: boolean; message: string }>(
-      `/api/creator/workspaces/${workspaceId}/storage/drive`,
-      { method: "PUT", body: input },
-    ),
+  startWorkspaceDrive: (workspaceId: string) =>
+    apiRequest<{ url: string }>(`/api/creator/workspaces/${workspaceId}/storage/drive/start`, {
+      method: "POST",
+    }),
   disconnectWorkspaceDrive: (workspaceId: string) =>
     apiRequest<void>(`/api/creator/workspaces/${workspaceId}/storage/drive`, { method: "DELETE" }),
   testWorkspaceDrive: (workspaceId: string) =>
@@ -377,6 +370,7 @@ export const cmsApi = {
       publicBaseUrl: string;
       forcePathStyle: boolean;
     };
+    gdrive: { clientId: string; clientSecret?: string };
   }) => apiRequest<StorageSettings>("/api/cms/settings/storage", { method: "PUT", body: input }),
   testStorage: (driver: "local" | "s3") =>
     apiRequest<{ ok: boolean; message: string }>("/api/cms/settings/storage/test", {

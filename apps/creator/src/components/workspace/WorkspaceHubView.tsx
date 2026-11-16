@@ -13,21 +13,21 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import { useSessionQuery, useSwitchWorkspaceMutation } from "@rupakarsa/shared/hooks/use-session";
 import {
   useApproveJoinRequestMutation,
   useCreateWorkspaceMutation,
   useDeleteWorkspaceMutation,
+  useDisconnectWorkspaceDriveMutation,
   useLeaveWorkspaceMutation,
   useRejectJoinRequestMutation,
   useRemoveMemberMutation,
   useRenameWorkspaceMutation,
   useRequestJoinMutation,
-  useConnectWorkspaceDriveMutation,
-  useDisconnectWorkspaceDriveMutation,
+  useStartWorkspaceDriveMutation,
   useTestWorkspaceDriveMutation,
   useUpdateMemberRoleMutation,
   useWorkspaceDriveQuery,
@@ -39,7 +39,7 @@ import { formatDate, formatTokens, formatWorkspaceRole } from "@rupakarsa/shared
 import { slugify } from "@rupakarsa/shared/lib/slug";
 import type { JoinRequestStatus, Workspace } from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
-import { Button, Dialog, Field, TextArea, TextInput } from "@rupakarsa/shared/ui";
+import { Button, Dialog, Field, TextInput } from "@rupakarsa/shared/ui";
 
 const STATUS_STYLE: Record<JoinRequestStatus, string> = {
   PENDING: "bg-accent-soft text-accent-strong",
@@ -55,9 +55,26 @@ const STATUS_LABEL: Record<JoinRequestStatus, string> = {
 
 export function WorkspaceHubView() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const sessionQuery = useSessionQuery();
   const workspacesQuery = useWorkspacesQuery();
   const pushToast = useUiStore((state) => state.pushToast);
+
+  // Google redirects back with `?drive=connected|error`; announce it once, then clean the URL.
+  const announcedDrive = useRef<string | null>(null);
+  useEffect(() => {
+    const result = searchParams.get("drive");
+    if (!result || announcedDrive.current === result) return;
+    announcedDrive.current = result;
+    pushToast(
+      result === "connected" ? "success" : "error",
+      result === "connected"
+        ? "Google Drive terhubung."
+        : "Gagal menghubungkan Google Drive. Coba lagi atau hubungi admin.",
+    );
+    router.replace(pathname, { scroll: false });
+  }, [pathname, pushToast, router, searchParams]);
 
   const createWorkspace = useCreateWorkspaceMutation();
   const switchWorkspace = useSwitchWorkspaceMutation();
@@ -818,29 +835,24 @@ export function WorkspaceHubView() {
 
 function WorkspaceDriveSection({ workspaceId }: { workspaceId: string }) {
   const driveQuery = useWorkspaceDriveQuery(workspaceId);
-  const connectDrive = useConnectWorkspaceDriveMutation();
+  const startDrive = useStartWorkspaceDriveMutation();
   const disconnectDrive = useDisconnectWorkspaceDriveMutation();
   const testDrive = useTestWorkspaceDriveMutation();
   const pushToast = useUiStore((state) => state.pushToast);
 
-  const [serviceAccountEmail, setServiceAccountEmail] = useState("");
-  const [privateKey, setPrivateKey] = useState("");
-  const [folderId, setFolderId] = useState("");
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
   const drive = driveQuery.data;
+  const defaultStorage = drive?.defaultStorage;
+  const needsReconnect = Boolean(drive?.connected && drive.lastError?.includes("kedaluwarsa"));
 
   function handleConnect(): void {
-    connectDrive.mutate(
-      { workspaceId, serviceAccountEmail, privateKey, folderId },
-      {
-        onSuccess: (result) => {
-          pushToast(result.ok ? "success" : "error", result.message);
-          setPrivateKey("");
-        },
-        onError: (error) => pushToast("error", error.message),
+    startDrive.mutate(workspaceId, {
+      onSuccess: ({ url }) => {
+        window.location.href = url;
       },
-    );
+      onError: (error) => pushToast("error", error.message),
+    });
   }
 
   function handleTest(): void {
@@ -873,89 +885,109 @@ function WorkspaceDriveSection({ workspaceId }: { workspaceId: string }) {
         </span>
       </div>
 
+      <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+        <div className="rounded-xl border border-border bg-white px-3 py-2.5">
+          <p className="text-[11px] font-medium text-ink">Storage default (CMS)</p>
+          <p className="mt-1 text-[10px] leading-relaxed text-muted">
+            {defaultStorage
+              ? `Storage ${defaultStorage.kind === "s3" ? "S3" : "lokal"} · ${
+                  defaultStorage.retentionDays > 0
+                    ? `retensi otomatis ${defaultStorage.retentionDays} hari`
+                    : "tanpa retensi otomatis"
+                }`
+              : "Memuat konfigurasi storage…"}
+          </p>
+          <p className="mt-1 text-[10px] leading-relaxed text-muted">
+            Konfigurasi ini diatur admin di CMS → Storage dan berlaku untuk workspace tanpa Google
+            Drive.
+          </p>
+        </div>
+        <div className="rounded-xl border border-border bg-white px-3 py-2.5">
+          <p className="text-[11px] font-medium text-ink">Google Drive workspace</p>
+          <p className="mt-1 text-[10px] leading-relaxed text-muted">
+            File disimpan di Drive Google Anda dalam folder Rupakarsa. Tidak ada penghapusan otomatis
+            oleh Rupakarsa; kuota memakai Drive Anda. Putuskan kapan saja—file lama tetap di Drive.
+          </p>
+        </div>
+      </div>
+
       {driveQuery.isPending ? (
         <p className="mt-2 text-[11px] text-muted">Memuat status Drive…</p>
-      ) : drive?.connected ? (
-        <div className="mt-2 flex flex-col gap-2">
-          <p className="text-[11px] leading-relaxed text-muted">
-            Semua lampiran dan hasil render workspace ini disimpan di Drive.
-            <br />
-            <span className="font-mono text-[10px] text-ink">{drive.serviceAccountEmail}</span>
-            <br />
-            Folder: <span className="font-mono text-[10px] text-ink">{drive.folderId}</span>
-            <br />
-            Terhubung sejak {formatDate(drive.connectedAt)}
-          </p>
-          {drive.lastError ? (
-            <p className="rounded-lg border border-danger/20 bg-danger/5 px-2 py-1.5 text-[10px] text-danger">
-              {drive.lastError}
-            </p>
-          ) : null}
-          <div className="flex flex-wrap gap-1.5">
-            <Button size="sm" variant="secondary" loading={testDrive.isPending} onClick={handleTest}>
-              Uji koneksi
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setConfirmDisconnect(true)}>
-              Putuskan
-            </Button>
-          </div>
-        </div>
       ) : (
         <div className="mt-2 flex flex-col gap-2">
-          <Field label="Email service account" htmlFor="drive-email">
-            <TextInput
-              id="drive-email"
-              value={serviceAccountEmail}
-              onChange={(event) => setServiceAccountEmail(event.target.value)}
-              placeholder="rupakarsa@project.iam.gserviceaccount.com"
-            />
-          </Field>
-          <Field label="Private key JSON" htmlFor="drive-key">
-            <TextArea
-              id="drive-key"
-              value={privateKey}
-              onChange={(event) => setPrivateKey(event.target.value)}
-              rows={3}
-              placeholder="Tempel isi JSON service account"
-              className="min-h-20 bg-white font-mono text-[10px]"
-            />
-          </Field>
-          <Field label="Folder ID Drive" htmlFor="drive-folder">
-            <TextInput
-              id="drive-folder"
-              value={folderId}
-              onChange={(event) => setFolderId(event.target.value)}
-              placeholder="1AbCdEfGhIjKlMnOpQrStUv"
-            />
-          </Field>
-          <Button
-            size="sm"
-            variant="secondary"
-            loading={connectDrive.isPending}
-            disabled={
-              privateKey.trim().length === 0 ||
-              folderId.trim().length === 0 ||
-              serviceAccountEmail.trim().length === 0
-            }
-            onClick={handleConnect}
-          >
-            Hubungkan Drive
-          </Button>
-          <p className="text-[10px] leading-relaxed text-muted">
-            Bagikan folder Drive ke email service account di atas sebagai Editor.
-          </p>
+          {drive?.connected ? (
+            <p className="text-[11px] leading-relaxed text-muted">
+              Akun Google:{" "}
+              <span className="font-mono text-[10px] text-ink">{drive.googleEmail}</span>
+              <br />
+              Folder:{" "}
+              <a
+                href={drive.folderUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-[10px] text-accent-strong underline-offset-2 hover:underline"
+              >
+                {drive.folderName}
+              </a>
+              <br />
+              Terhubung sejak {formatDate(drive.connectedAt)}
+            </p>
+          ) : null}
+
           {drive?.lastError ? (
             <p className="rounded-lg border border-danger/20 bg-danger/5 px-2 py-1.5 text-[10px] text-danger">
               {drive.lastError}
             </p>
           ) : null}
+
+          {drive && !drive.oauthConfigured ? (
+            <>
+              <Button size="sm" variant="secondary" disabled>
+                Hubungkan Google Drive
+              </Button>
+              <p className="text-[10px] leading-relaxed text-muted">
+                Admin belum mengonfigurasi Google OAuth di CMS → Storage.
+              </p>
+            </>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {!drive?.connected || needsReconnect ? (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  loading={startDrive.isPending}
+                  onClick={handleConnect}
+                >
+                  {needsReconnect ? "Hubungkan ulang" : "Hubungkan Google Drive"}
+                </Button>
+              ) : null}
+              {drive?.connected ? (
+                <>
+                  <Button size="sm" variant="secondary" loading={testDrive.isPending} onClick={handleTest}>
+                    Uji koneksi
+                  </Button>
+                  <a
+                    href={drive.folderUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full border border-border px-2.5 py-1 text-[11px] font-medium text-ink transition-colors hover:bg-white"
+                  >
+                    Buka folder
+                  </a>
+                  <Button size="sm" variant="ghost" onClick={() => setConfirmDisconnect(true)}>
+                    Putuskan
+                  </Button>
+                </>
+              ) : null}
+            </div>
+          )}
         </div>
       )}
 
       <Dialog
         open={confirmDisconnect}
         title="Putuskan Google Drive?"
-        description="Aset baru akan disimpan di storage default setelah diputus."
+        description="Aset baru akan disimpan di storage default setelah diputus. File yang sudah ada tetap di Drive."
         onClose={() => setConfirmDisconnect(false)}
         footer={
           <>
@@ -975,3 +1007,4 @@ function WorkspaceDriveSection({ workspaceId }: { workspaceId: string }) {
     </div>
   );
 }
+

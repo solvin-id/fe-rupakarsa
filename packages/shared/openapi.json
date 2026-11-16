@@ -559,10 +559,19 @@
           "connected": {
             "type": "boolean"
           },
-          "serviceAccountEmail": {
+          "oauthConfigured": {
+            "type": "boolean"
+          },
+          "googleEmail": {
             "type": "string"
           },
           "folderId": {
+            "type": "string"
+          },
+          "folderName": {
+            "type": "string"
+          },
+          "folderUrl": {
             "type": "string"
           },
           "connectedAt": {
@@ -572,14 +581,48 @@
           "lastError": {
             "type": "string",
             "nullable": true
+          },
+          "defaultStorage": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "s3",
+                  "local"
+                ]
+              },
+              "retentionDays": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "retentionDays"
+            ]
           }
         },
         "required": [
           "connected",
-          "serviceAccountEmail",
+          "oauthConfigured",
+          "googleEmail",
           "folderId",
+          "folderName",
+          "folderUrl",
           "connectedAt",
-          "lastError"
+          "lastError",
+          "defaultStorage"
+        ]
+      },
+      "DriveStart": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
         ]
       },
       "ProviderTest": {
@@ -1639,6 +1682,29 @@
               "secretAccessKeyMasked"
             ]
           },
+          "gdrive": {
+            "type": "object",
+            "properties": {
+              "clientId": {
+                "type": "string"
+              },
+              "clientSecretMasked": {
+                "type": "string"
+              },
+              "redirectUri": {
+                "type": "string"
+              },
+              "configured": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "clientId",
+              "clientSecretMasked",
+              "redirectUri",
+              "configured"
+            ]
+          },
           "workspaces": {
             "type": "array",
             "items": {
@@ -1653,7 +1719,13 @@
                 "driveConnected": {
                   "type": "boolean"
                 },
+                "googleEmail": {
+                  "type": "string"
+                },
                 "folderIdMasked": {
+                  "type": "string"
+                },
+                "folderUrl": {
                   "type": "string"
                 },
                 "lastError": {
@@ -1669,7 +1741,9 @@
                 "id",
                 "name",
                 "driveConnected",
+                "googleEmail",
                 "folderIdMasked",
+                "folderUrl",
                 "lastError",
                 "connectedAt"
               ]
@@ -1680,6 +1754,7 @@
           "driver",
           "retentionDays",
           "s3",
+          "gdrive",
           "workspaces"
         ]
       },
@@ -3192,89 +3267,6 @@
           }
         }
       },
-      "put": {
-        "tags": [
-          "Creator storage"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "serviceAccountEmail": {
-                    "type": "string"
-                  },
-                  "privateKey": {
-                    "type": "string"
-                  },
-                  "folderId": {
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "serviceAccountEmail",
-                  "privateKey",
-                  "folderId"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Drive connected",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProviderTest"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid service account JSON",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Admin only",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "Drive probe failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      },
       "delete": {
         "tags": [
           "Creator storage"
@@ -3296,6 +3288,56 @@
           },
           "403": {
             "description": "Admin only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/workspaces/{id}/storage/drive/start": {
+      "post": {
+        "tags": [
+          "Creator storage"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Google consent URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DriveStart"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "OAuth client not configured",
             "content": {
               "application/json": {
                 "schema": {
@@ -6114,12 +6156,27 @@
                       "publicBaseUrl",
                       "forcePathStyle"
                     ]
+                  },
+                  "gdrive": {
+                    "type": "object",
+                    "properties": {
+                      "clientId": {
+                        "type": "string"
+                      },
+                      "clientSecret": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "clientId"
+                    ]
                   }
                 },
                 "required": [
                   "driver",
                   "retentionDays",
-                  "s3"
+                  "s3",
+                  "gdrive"
                 ]
               }
             }

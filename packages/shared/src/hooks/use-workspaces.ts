@@ -122,22 +122,12 @@ export function useWorkspaceDriveQuery(workspaceId: string | null) {
   });
 }
 
-export function useConnectWorkspaceDriveMutation() {
+export function useStartWorkspaceDriveMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: {
-      workspaceId: string;
-      serviceAccountEmail: string;
-      privateKey: string;
-      folderId: string;
-    }) =>
-      creatorApi.connectWorkspaceDrive(input.workspaceId, {
-        serviceAccountEmail: input.serviceAccountEmail,
-        privateKey: input.privateKey,
-        folderId: input.folderId,
-      }),
-    onSuccess: (_data, input) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.drive(input.workspaceId) });
+    mutationFn: (workspaceId: string) => creatorApi.startWorkspaceDrive(workspaceId),
+    onSuccess: (_data, workspaceId) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.drive(workspaceId) });
       void queryClient.invalidateQueries({ queryKey: queryKeys.storage });
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.storage });
     },
