@@ -1,0 +1,11 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "rupakarsa-creator",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-11-16",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "services": [{ "binding": "WORKER_SELF_REFERENCE", "service": "rupakarsa-creator" }],
+  "observability": { "enabled": true },
+  "routes": [{ "pattern": "rupakarsa.solvin.id", "custom_domain": true }]
+}

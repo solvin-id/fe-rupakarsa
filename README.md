@@ -7,7 +7,7 @@ Ruang produksi visual berbasis AI dengan **dua surface** yang berbagi satu login
 | **Creator** | `apps/creator` | `3000` | Landing page, login kreator, drive proyek, studio Plan → Implement |
 | **CMS** | `apps/cms` | `3001` | Overview, workspaces, users & akses, providers, models & tarif, settings (login diarahkan ke Creator) |
 | **Shared** | `packages/shared` | — | Design system, tipe domain, API client, hooks TanStack Query, auth/access |
-| **API** | `../rupakarsa-backend` | `8787` | Hono + PostgreSQL + Redis: sesi, workspace, token ledger, render pipeline, CMS |
+| **API** | `../be-core-rupakarsa` | `8787` | Hono + PostgreSQL + Redis: sesi, workspace, token ledger, render pipeline, CMS |
 
 Konsep akses: **default user adalah creator**. Setiap akun baru ber-role `USER` dan tidak bisa
 masuk CMS. Superadmin dapat memberikan **Akses CMS** per akun dari `CMS → Users & akses`; user
@@ -31,11 +31,11 @@ tabel `app_settings` server, lalu dibaca lewat `GET /api/public/config`.
 
 ## Menjalankan
 
-Backend harus hidup lebih dulu (repo terpisah `../rupakarsa-backend`):
+Backend harus hidup lebih dulu (repo terpisah `../be-core-rupakarsa`):
 
 ```bash
 # terminal 0 — API + worker render (PostgreSQL & Redis sudah berjalan)
-cd ../rupakarsa-backend
+cd ../be-core-rupakarsa
 npm run db:migrate && npm run db:seed
 npm run dev          # http://localhost:8787
 npm run dev:worker   # terminal terpisah
@@ -93,7 +93,7 @@ npm run typecheck     # kedua app
 npm run lint          # kedua app
 npm test              # unit test shared (root vitest)
 npm run build         # build Creator lalu CMS
-npm run api:types     # salin ../rupakarsa-backend/openapi.json + regenerasi api-schema.d.ts
+npm run api:types     # salin ../be-core-rupakarsa/openapi.json + regenerasi api-schema.d.ts
 ```
 
 ## Environment

@@ -1,9 +1,0 @@
-[build]
-  command = "npm run build -w @rupakarsa/cms"
-  publish = "apps/cms/.next"
-
-[build.environment]
-  NODE_VERSION = "22"
-
-[[plugins]]
-  package = "@netlify/plugin-nextjs"

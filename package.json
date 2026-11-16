@@ -2,7 +2,7 @@
   "name": "rupakarsa",
   "version": "0.1.0",
   "private": true,
-  "description": "Rupakarsa \u2014 AI production workspace with separate Creator and CMS surfaces",
+  "description": "Rupakarsa — AI production workspace with separate Creator and CMS surfaces",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -16,9 +16,14 @@
     "lint": "npm run lint -w @rupakarsa/creator && npm run lint -w @rupakarsa/cms",
     "typecheck": "npm run typecheck -w @rupakarsa/creator && npm run typecheck -w @rupakarsa/cms",
     "test": "vitest run",
-    "api:types": "node scripts/sync-api-types.mjs"
+    "api:types": "node scripts/sync-api-types.mjs",
+    "cf:build:creator": "npm run cf:build -w @rupakarsa/creator",
+    "cf:build:cms": "npm run cf:build -w @rupakarsa/cms",
+    "cf:deploy:creator": "npm run cf:deploy -w @rupakarsa/creator",
+    "cf:deploy:cms": "npm run cf:deploy -w @rupakarsa/cms"
   },
   "devDependencies": {
+    "@opennextjs/cloudflare": "^1.20.17",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
@@ -27,6 +32,7 @@
     "openapi-typescript": "^7.13.0",
     "typescript": "^5.9.3",
     "vite-tsconfig-paths": "^6.1.1",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "wrangler": "^4.162.0"
   }
 }

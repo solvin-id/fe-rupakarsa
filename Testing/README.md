@@ -7,7 +7,7 @@ Testing/
 └── Shared/    # tes paket @rupakarsa/shared (API client, token, media, WhatsApp, kartu generasi) — jsdom
 ```
 
-Tes backend berada di repo terpisah (`rupakarsa-backend/tests/`).
+Tes backend berada di repo terpisah (`be-core-rupakarsa/tests/`).
 
 ## Menjalankan
 

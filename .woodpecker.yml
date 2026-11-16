@@ -1,0 +1,72 @@
+skip_clone: true
+labels:
+  backend: local
+
+steps:
+  - name: clone
+    image: bash
+    commands:
+      - git clone -b "$CI_COMMIT_BRANCH" https://github.com/solvin-id/fe-rupakarsa.git .
+      - git checkout "$CI_COMMIT_SHA"
+    when:
+      event: [push, manual]
+      branch: [main]
+
+  - name: install
+    image: bash
+    commands:
+      - export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
+      - export npm_config_cache="/home/woodpecker/caches/npm-cache"
+      - export NEXT_TELEMETRY_DISABLED=1
+      - mkdir -p "$npm_config_cache"
+      - node -v && npm -v
+      - npm ci
+    when:
+      event: [push, manual]
+      branch: [main]
+
+  - name: creator
+    image: bash
+    environment:
+      CLOUDFLARE_API_TOKEN: { from_secret: cloudflare_api_token }
+      CLOUDFLARE_ACCOUNT_ID: { from_secret: cloudflare_account_id }
+      NEXT_PUBLIC_API_BASE_URL: https://rupakarsa-api.solvin.id
+      NEXT_PUBLIC_CREATOR_URL: https://rupakarsa.solvin.id
+      NEXT_PUBLIC_CMS_URL: https://rupakarsa-cms.solvin.id
+      NEXT_TELEMETRY_DISABLED: "1"
+    commands:
+      - test "$CI_COMMIT_BRANCH" = "main" || { echo "refusing to deploy from $CI_COMMIT_BRANCH"; exit 1; }
+      - export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
+      - cd apps/creator && npx --no-install opennextjs-cloudflare build
+      - npx --no-install wrangler deploy --dry-run 2>&1 | tee /tmp/rk-dry.txt
+      - >-
+        awk '{for(i=1;i<=NF;i++) if($i=="gzip:"){g=$(i+1); u=$(i+2)}}
+        END{if(g==""){print "size gate: gzip size not parsed, continuing"; exit 0}
+        x=(u ~ /MiB/) ? g : g/1024; printf "gzip %.2f MiB\n", x; exit (x>3.0)}' /tmp/rk-dry.txt
+      - npx --no-install wrangler deploy
+    when:
+      event: [push, manual]
+      branch: [main]
+
+  - name: cms
+    image: bash
+    environment:
+      CLOUDFLARE_API_TOKEN: { from_secret: cloudflare_api_token }
+      CLOUDFLARE_ACCOUNT_ID: { from_secret: cloudflare_account_id }
+      NEXT_PUBLIC_API_BASE_URL: https://rupakarsa-api.solvin.id
+      NEXT_PUBLIC_CREATOR_URL: https://rupakarsa.solvin.id
+      NEXT_PUBLIC_CMS_URL: https://rupakarsa-cms.solvin.id
+      NEXT_TELEMETRY_DISABLED: "1"
+    commands:
+      - test "$CI_COMMIT_BRANCH" = "main" || { echo "refusing to deploy from $CI_COMMIT_BRANCH"; exit 1; }
+      - export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
+      - cd apps/cms && npx --no-install opennextjs-cloudflare build
+      - npx --no-install wrangler deploy --dry-run 2>&1 | tee /tmp/rk-dry-cms.txt
+      - >-
+        awk '{for(i=1;i<=NF;i++) if($i=="gzip:"){g=$(i+1); u=$(i+2)}}
+        END{if(g==""){print "size gate: gzip size not parsed, continuing"; exit 0}
+        x=(u ~ /MiB/) ? g : g/1024; printf "gzip %.2f MiB\n", x; exit (x>3.0)}' /tmp/rk-dry-cms.txt
+      - npx --no-install wrangler deploy
+    when:
+      event: [push, manual]
+      branch: [main]

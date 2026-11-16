@@ -6,6 +6,10 @@ coverage/
 .env
 .env*.local
 .netlify/
+.open-next/
+.wrangler/
+.dev.vars
+cloudflare-env.d.ts
 *.tsbuildinfo
 next-env.d.ts
 

@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
-const backendSpec = resolve(repoRoot, "../rupakarsa-backend/openapi.json");
+const backendSpec = resolve(repoRoot, "../be-core-rupakarsa/openapi.json");
 const sharedSpec = resolve(repoRoot, "packages/shared/openapi.json");
 const output = resolve(repoRoot, "packages/shared/src/lib/api-schema.d.ts");
 
@@ -27,7 +27,7 @@ if (await exists(backendSpec)) {
   process.stdout.write(`Using committed ${sharedSpec}\n`);
 } else {
   process.stderr.write(
-    "No OpenAPI document found. Run `npm run openapi` in ../rupakarsa-backend first.\n",
+    "No OpenAPI document found. Run `npm run openapi` in ../be-core-rupakarsa first.\n",
   );
   process.exit(1);
 }
