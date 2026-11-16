@@ -70,3 +70,13 @@ steps:
     when:
       event: [push, manual]
       branch: [main]
+
+  - name: verify-api
+    image: bash
+    commands:
+      - export PATH="/usr/local/bin:/usr/bin:/bin:$PATH"
+      - curl -fsS -m 10 https://rupakarsa-api.solvin.id/health | tee /tmp/rk-health.json
+      - grep -q '"status":"ok"' /tmp/rk-health.json
+    when:
+      event: [push, manual]
+      branch: [main]
