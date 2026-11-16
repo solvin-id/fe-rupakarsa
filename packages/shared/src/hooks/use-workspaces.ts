@@ -113,3 +113,54 @@ export function useRemoveMemberMutation() {
     },
   });
 }
+
+export function useWorkspaceDriveQuery(workspaceId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.drive(workspaceId ?? "none"),
+    queryFn: () => creatorApi.workspaceDrive(workspaceId ?? ""),
+    enabled: workspaceId !== null,
+  });
+}
+
+export function useConnectWorkspaceDriveMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      workspaceId: string;
+      serviceAccountEmail: string;
+      privateKey: string;
+      folderId: string;
+    }) =>
+      creatorApi.connectWorkspaceDrive(input.workspaceId, {
+        serviceAccountEmail: input.serviceAccountEmail,
+        privateKey: input.privateKey,
+        folderId: input.folderId,
+      }),
+    onSuccess: (_data, input) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.drive(input.workspaceId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.storage });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.storage });
+    },
+  });
+}
+
+export function useDisconnectWorkspaceDriveMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (workspaceId: string) => creatorApi.disconnectWorkspaceDrive(workspaceId),
+    onSuccess: (_data, workspaceId) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.drive(workspaceId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.storage });
+    },
+  });
+}
+
+export function useTestWorkspaceDriveMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (workspaceId: string) => creatorApi.testWorkspaceDrive(workspaceId),
+    onSuccess: (_data, workspaceId) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.drive(workspaceId) });
+    },
+  });
+}

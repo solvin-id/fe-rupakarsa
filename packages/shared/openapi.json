@@ -18,16 +18,25 @@
           "status": {
             "type": "string",
             "enum": [
-              "ok"
+              "ok",
+              "degraded"
             ]
           },
           "db": {
+            "type": "boolean"
+          },
+          "redis": {
+            "type": "boolean"
+          },
+          "worker": {
             "type": "boolean"
           }
         },
         "required": [
           "status",
-          "db"
+          "db",
+          "redis",
+          "worker"
         ]
       },
       "AdminContact": {
@@ -91,12 +100,77 @@
             "required": [
               "simulation"
             ]
+          },
+          "planModel": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "inputCapabilities": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "TEXT",
+                    "IMAGE",
+                    "VIDEO"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "inputCapabilities"
+            ]
+          },
+          "defaults": {
+            "type": "object",
+            "properties": {
+              "videoModelId": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "videoModelId"
+            ]
           }
         },
         "required": [
           "contact",
           "pricing",
-          "features"
+          "features",
+          "planModel",
+          "defaults"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ]
+          }
+        },
+        "required": [
+          "error"
         ]
       },
       "User": {
@@ -128,6 +202,9 @@
           "isActive": {
             "type": "boolean"
           },
+          "totpEnabled": {
+            "type": "boolean"
+          },
           "createdAt": {
             "type": "string"
           }
@@ -140,6 +217,7 @@
           "role",
           "cmsAccess",
           "isActive",
+          "totpEnabled",
           "createdAt"
         ]
       },
@@ -248,27 +326,48 @@
           "activeWorkspaceRole"
         ]
       },
-      "ErrorResponse": {
-        "type": "object",
-        "properties": {
-          "error": {
+      "LoginResponse": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/SessionPayload"
+          },
+          {
             "type": "object",
             "properties": {
-              "code": {
-                "type": "string"
+              "totpRequired": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ]
               },
-              "message": {
+              "challengeToken": {
                 "type": "string"
               }
             },
             "required": [
-              "code",
-              "message"
+              "totpRequired",
+              "challengeToken"
             ]
+          }
+        ]
+      },
+      "TotpEnrollment": {
+        "type": "object",
+        "properties": {
+          "secret": {
+            "type": "string"
+          },
+          "otpauthUrl": {
+            "type": "string"
+          },
+          "qrDataUrl": {
+            "type": "string"
           }
         },
         "required": [
-          "error"
+          "secret",
+          "otpauthUrl",
+          "qrDataUrl"
         ]
       },
       "WorkspaceJoinRequest": {
@@ -454,6 +553,50 @@
           }
         ]
       },
+      "WorkspaceDrive": {
+        "type": "object",
+        "properties": {
+          "connected": {
+            "type": "boolean"
+          },
+          "serviceAccountEmail": {
+            "type": "string"
+          },
+          "folderId": {
+            "type": "string"
+          },
+          "connectedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastError": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "connected",
+          "serviceAccountEmail",
+          "folderId",
+          "connectedAt",
+          "lastError"
+        ]
+      },
+      "ProviderTest": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "message"
+        ]
+      },
       "Folder": {
         "type": "object",
         "properties": {
@@ -552,6 +695,18 @@
           "plannedPrompt": {
             "type": "string"
           },
+          "planMode": {
+            "type": "boolean"
+          },
+          "finalPrompt": {
+            "type": "string"
+          },
+          "analysisSnapshot": {
+            "type": "string"
+          },
+          "preContextSnapshot": {
+            "type": "string"
+          },
           "referenceImageUrl": {
             "type": "string",
             "nullable": true
@@ -594,6 +749,17 @@
             "type": "string",
             "nullable": true
           },
+          "outputMime": {
+            "type": "string",
+            "nullable": true
+          },
+          "outputSize": {
+            "type": "integer"
+          },
+          "outputPurgedAt": {
+            "type": "string",
+            "nullable": true
+          },
           "errorMessage": {
             "type": "string",
             "nullable": true
@@ -619,12 +785,19 @@
           "mediaType",
           "rawPrompt",
           "plannedPrompt",
+          "planMode",
+          "finalPrompt",
+          "analysisSnapshot",
+          "preContextSnapshot",
           "referenceImageUrl",
           "selectedParams",
           "tokensCharged",
           "status",
           "externalJobId",
           "outputUrl",
+          "outputMime",
+          "outputSize",
+          "outputPurgedAt",
           "errorMessage",
           "refunded",
           "createdAt",
@@ -646,12 +819,40 @@
           "displayName": {
             "type": "string"
           },
+          "providerModelId": {
+            "type": "string"
+          },
           "mediaType": {
             "type": "string",
             "enum": [
               "VIDEO",
               "IMAGE"
             ]
+          },
+          "inputCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "TEXT",
+                "IMAGE",
+                "VIDEO"
+              ]
+            }
+          },
+          "outputCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "TEXT",
+                "IMAGE",
+                "VIDEO"
+              ]
+            }
+          },
+          "source": {
+            "type": "string"
           },
           "allowedParams": {
             "type": "object",
@@ -685,6 +886,9 @@
           },
           "isActive": {
             "type": "boolean"
+          },
+          "isDefault": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -692,10 +896,15 @@
           "providerId",
           "code",
           "displayName",
+          "providerModelId",
           "mediaType",
+          "inputCapabilities",
+          "outputCapabilities",
+          "source",
           "allowedParams",
           "tokenCost",
-          "isActive"
+          "isActive",
+          "isDefault"
         ]
       },
       "PlanResponse": {
@@ -737,12 +946,43 @@
           },
           "workspace": {
             "$ref": "#/components/schemas/Workspace"
+          },
+          "analysis": {
+            "type": "object",
+            "properties": {
+              "attachments": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "text"
+                  ]
+                }
+              },
+              "preContext": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "attachments",
+              "preContext"
+            ]
           }
         },
         "required": [
           "blueprint",
           "cost",
-          "workspace"
+          "workspace",
+          "analysis"
         ]
       },
       "CreateGenerationResponse": {
@@ -760,10 +1000,118 @@
           "workspace"
         ]
       },
-      "UploadResponse": {
+      "FolderContext": {
         "type": "object",
         "properties": {
-          "url": {
+          "id": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "folderId": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "TEXT",
+              "UPLOAD",
+              "GENERATION"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "mediaAssetId": {
+            "type": "string",
+            "nullable": true
+          },
+          "generationId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdByUserId": {
+            "type": "string",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspaceId",
+          "folderId",
+          "source",
+          "label",
+          "text",
+          "mediaAssetId",
+          "generationId",
+          "createdByUserId",
+          "isActive",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "AssetAnalysis": {
+        "type": "object",
+        "properties": {
+          "sourceKind": {
+            "type": "string",
+            "enum": [
+              "UPLOAD",
+              "GENERATION"
+            ]
+          },
+          "sourceId": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "structured": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "modelId": {
+            "type": "string",
+            "nullable": true
+          },
+          "cached": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sourceKind",
+          "sourceId",
+          "text",
+          "structured",
+          "modelId",
+          "cached"
+        ]
+      },
+      "StorageItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
             "type": "string"
           },
           "mime": {
@@ -771,12 +1119,243 @@
           },
           "size": {
             "type": "integer"
+          },
+          "width": {
+            "type": "integer",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "driver": {
+            "type": "string",
+            "enum": [
+              "local",
+              "s3",
+              "gdrive"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "UPLOAD",
+              "GENERATION"
+            ]
+          },
+          "url": {
+            "type": "string"
+          },
+          "generationId": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelName": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "purgedAt": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
-          "url",
+          "id",
+          "key",
+          "name",
           "mime",
-          "size"
+          "size",
+          "width",
+          "height",
+          "durationMs",
+          "driver",
+          "source",
+          "url",
+          "generationId",
+          "modelName",
+          "createdAt",
+          "purgedAt"
+        ]
+      },
+      "StorageList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StorageItem"
+            }
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer"
+              },
+              "bytes": {
+                "type": "integer"
+              },
+              "images": {
+                "type": "integer"
+              },
+              "videos": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "count",
+              "bytes",
+              "images",
+              "videos"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "totals"
+        ]
+      },
+      "Package": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tokens": {
+            "type": "integer"
+          },
+          "planQuota": {
+            "type": "integer"
+          },
+          "priceRupiah": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "tokens",
+          "planQuota",
+          "priceRupiah"
+        ]
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true
+          },
+          "tokens": {
+            "type": "integer"
+          },
+          "planQuota": {
+            "type": "integer"
+          },
+          "amountRupiah": {
+            "type": "integer"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "providerRef": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "PENDING",
+              "PAID",
+              "EXPIRED",
+              "FAILED"
+            ]
+          },
+          "paidAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspaceId",
+          "userId",
+          "tokens",
+          "planQuota",
+          "amountRupiah",
+          "provider",
+          "providerRef",
+          "status",
+          "paidAt",
+          "createdAt"
+        ]
+      },
+      "CreateOrderResponse": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "$ref": "#/components/schemas/Order"
+          },
+          "redirectUrl": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "order",
+          "redirectUrl"
+        ]
+      },
+      "UploadResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "mime": {
+            "type": "string"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "durationMs": {
+            "type": "integer",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "key",
+          "mime",
+          "size",
+          "durationMs"
         ]
       },
       "AccountCreated": {
@@ -833,6 +1412,30 @@
           "apiKeyMasked": {
             "type": "string"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "HIGGSFIELD",
+              "OPENAI_COMPATIBLE"
+            ]
+          },
+          "isFixed": {
+            "type": "boolean"
+          },
+          "modelsPath": {
+            "type": "string"
+          },
+          "supportsVideoInput": {
+            "type": "boolean"
+          },
+          "lastSyncedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "syncError": {
+            "type": "string",
+            "nullable": true
+          },
           "isActive": {
             "type": "boolean"
           },
@@ -846,23 +1449,87 @@
           "name",
           "baseUrl",
           "apiKeyMasked",
+          "kind",
+          "isFixed",
+          "modelsPath",
+          "supportsVideoInput",
+          "lastSyncedAt",
+          "syncError",
           "isActive",
           "updatedAt"
         ]
       },
-      "ProviderTest": {
+      "RemoteModel": {
         "type": "object",
         "properties": {
-          "ok": {
-            "type": "boolean"
-          },
-          "message": {
+          "providerModelId": {
             "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "inputCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "TEXT",
+                "IMAGE",
+                "VIDEO"
+              ]
+            }
+          },
+          "outputCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "TEXT",
+                "IMAGE",
+                "VIDEO"
+              ]
+            }
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "VIDEO",
+              "IMAGE"
+            ]
           }
         },
         "required": [
-          "ok",
-          "message"
+          "providerModelId",
+          "displayName",
+          "inputCapabilities",
+          "outputCapabilities",
+          "mediaType"
+        ]
+      },
+      "SyncResult": {
+        "type": "object",
+        "properties": {
+          "added": {
+            "type": "integer"
+          },
+          "updated": {
+            "type": "integer"
+          },
+          "skipped": {
+            "type": "integer"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiModel"
+            }
+          }
+        },
+        "required": [
+          "added",
+          "updated",
+          "skipped",
+          "models"
         ]
       },
       "ModelTemplate": {
@@ -923,6 +1590,229 @@
           "allowedParams",
           "tokenCost"
         ]
+      },
+      "StorageSettings": {
+        "type": "object",
+        "properties": {
+          "driver": {
+            "type": "string",
+            "enum": [
+              "local",
+              "s3"
+            ]
+          },
+          "retentionDays": {
+            "type": "integer"
+          },
+          "s3": {
+            "type": "object",
+            "properties": {
+              "endpoint": {
+                "type": "string"
+              },
+              "region": {
+                "type": "string"
+              },
+              "bucket": {
+                "type": "string"
+              },
+              "accessKeyId": {
+                "type": "string"
+              },
+              "publicBaseUrl": {
+                "type": "string"
+              },
+              "forcePathStyle": {
+                "type": "boolean"
+              },
+              "secretAccessKeyMasked": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "endpoint",
+              "region",
+              "bucket",
+              "accessKeyId",
+              "publicBaseUrl",
+              "forcePathStyle",
+              "secretAccessKeyMasked"
+            ]
+          },
+          "workspaces": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "driveConnected": {
+                  "type": "boolean"
+                },
+                "folderIdMasked": {
+                  "type": "string"
+                },
+                "lastError": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "connectedAt": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "driveConnected",
+                "folderIdMasked",
+                "lastError",
+                "connectedAt"
+              ]
+            }
+          }
+        },
+        "required": [
+          "driver",
+          "retentionDays",
+          "s3",
+          "workspaces"
+        ]
+      },
+      "StorageUsage": {
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "integer"
+          },
+          "bytes": {
+            "type": "integer"
+          },
+          "expired": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active",
+          "bytes",
+          "expired"
+        ]
+      },
+      "MailSettings": {
+        "type": "object",
+        "properties": {
+          "driver": {
+            "type": "string",
+            "enum": [
+              "smtp",
+              "log"
+            ]
+          },
+          "fromName": {
+            "type": "string"
+          },
+          "fromEmail": {
+            "type": "string"
+          },
+          "smtp": {
+            "type": "object",
+            "properties": {
+              "host": {
+                "type": "string"
+              },
+              "port": {
+                "type": "integer"
+              },
+              "secure": {
+                "type": "boolean"
+              },
+              "user": {
+                "type": "string"
+              },
+              "passwordMasked": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "host",
+              "port",
+              "secure",
+              "user",
+              "passwordMasked"
+            ]
+          }
+        },
+        "required": [
+          "driver",
+          "fromName",
+          "fromEmail",
+          "smtp"
+        ]
+      },
+      "CmsOrder": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Order"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "workspaceName": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "workspaceName"
+            ]
+          }
+        ]
+      },
+      "AuditLog": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "actorUserId": {
+            "type": "string",
+            "nullable": true
+          },
+          "action": {
+            "type": "string"
+          },
+          "targetType": {
+            "type": "string"
+          },
+          "targetId": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "ip": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "actorUserId",
+          "action",
+          "targetType",
+          "targetId",
+          "metadata",
+          "ip",
+          "createdAt"
+        ]
       }
     },
     "parameters": {}
@@ -936,6 +1826,16 @@
         "responses": {
           "200": {
             "description": "Service health",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "One dependency is unhealthy",
             "content": {
               "application/json": {
                 "schema": {
@@ -959,6 +1859,76 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/PublicConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/public/midtrans/webhook": {
+      "post": {
+        "tags": [
+          "Public"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "order_id": {
+                    "type": "string"
+                  },
+                  "status_code": {
+                    "type": "string"
+                  },
+                  "gross_amount": {
+                    "type": "string"
+                  },
+                  "signature_key": {
+                    "type": "string"
+                  },
+                  "transaction_status": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "order_id",
+                  "status_code",
+                  "gross_amount",
+                  "signature_key",
+                  "transaction_status"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Acknowledged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid signature",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -996,11 +1966,11 @@
         },
         "responses": {
           "200": {
-            "description": "Session payload",
+            "description": "Session payload, or a 2FA challenge when TOTP is enabled",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SessionPayload"
+                  "$ref": "#/components/schemas/LoginResponse"
                 }
               }
             }
@@ -1017,6 +1987,166 @@
           },
           "403": {
             "description": "Account without any workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/auth/totp/challenge": {
+      "post": {
+        "tags": [
+          "Creator auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challengeToken": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "challengeToken",
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Session payload after 2FA",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionPayload"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Wrong 2FA code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Expired challenge",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/auth/totp/enroll": {
+      "post": {
+        "tags": [
+          "Creator auth"
+        ],
+        "responses": {
+          "200": {
+            "description": "Enrolment material",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotpEnrollment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/auth/totp/activate": {
+      "post": {
+        "tags": [
+          "Creator auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "2FA activated"
+          },
+          "400": {
+            "description": "Invalid code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/auth/totp": {
+      "patch": {
+        "tags": [
+          "Creator auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "code": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "2FA disabled"
+          },
+          "400": {
+            "description": "Invalid code",
             "content": {
               "application/json": {
                 "schema": {
@@ -1133,6 +2263,230 @@
           },
           "403": {
             "description": "No workspace membership",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/auth/password-reset/request": {
+      "post": {
+        "tags": [
+          "Creator auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Always accepted; never reveals whether the account exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/auth/password-reset/confirm": {
+      "post": {
+        "tags": [
+          "Creator auth"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "token",
+                  "newPassword"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Password replaced"
+          },
+          "400": {
+            "description": "Expired or used token, or weak password",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/account/export": {
+      "get": {
+        "tags": [
+          "Creator account"
+        ],
+        "responses": {
+          "200": {
+            "description": "Portable copy of the caller's data (never includes password_hash)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "exportedAt": {
+                      "type": "string"
+                    },
+                    "user": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "nullable": true
+                      }
+                    },
+                    "memberships": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "workspaces": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "folders": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "generations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    },
+                    "contexts": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "nullable": true
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "exportedAt",
+                    "user",
+                    "memberships",
+                    "workspaces",
+                    "folders",
+                    "generations",
+                    "contexts"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/account": {
+      "delete": {
+        "tags": [
+          "Creator account"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "password": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "password"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Account scheduled for deletion (30 day retention)"
+          },
+          "400": {
+            "description": "Missing password",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Wrong password",
             "content": {
               "application/json": {
                 "schema": {
@@ -1799,6 +3153,210 @@
         }
       }
     },
+    "/api/creator/workspaces/{id}/storage/drive": {
+      "get": {
+        "tags": [
+          "Creator storage"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace Drive status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceDrive"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Creator storage"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "serviceAccountEmail": {
+                    "type": "string"
+                  },
+                  "privateKey": {
+                    "type": "string"
+                  },
+                  "folderId": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "serviceAccountEmail",
+                  "privateKey",
+                  "folderId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Drive connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderTest"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid service account JSON",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Drive probe failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Creator storage"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Drive disconnected"
+          },
+          "403": {
+            "description": "Admin only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/workspaces/{id}/storage/drive/test": {
+      "post": {
+        "tags": [
+          "Creator storage"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Drive probe result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderTest"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Admin only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Drive not connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/creator/folders": {
       "get": {
         "tags": [
@@ -2026,7 +3584,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Active models",
+            "description": "Active renderable models",
             "content": {
               "application/json": {
                 "schema": {
@@ -2052,6 +3610,10 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "folderId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
                   "modelId": {
                     "type": "string",
                     "format": "uuid"
@@ -2068,12 +3630,25 @@
                   "aspectRatio": {
                     "type": "string"
                   },
-                  "hasReference": {
-                    "type": "boolean",
-                    "default": false
+                  "attachmentKeys": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 4,
+                    "default": []
+                  },
+                  "contextIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "default": []
                   }
                 },
                 "required": [
+                  "folderId",
                   "modelId",
                   "rawPrompt",
                   "resolution",
@@ -2149,12 +3724,29 @@
                   "rawPrompt": {
                     "type": "string"
                   },
-                  "plannedPrompt": {
-                    "type": "string"
+                  "planMode": {
+                    "type": "boolean",
+                    "default": true
                   },
-                  "referenceImageUrl": {
+                  "finalPrompt": {
                     "type": "string",
                     "nullable": true
+                  },
+                  "attachmentKeys": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 4,
+                    "default": []
+                  },
+                  "contextIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "default": []
                   },
                   "selectedParams": {
                     "type": "object",
@@ -2173,16 +3765,12 @@
                       "resolution",
                       "aspectRatio"
                     ]
-                  },
-                  "simulateFailure": {
-                    "type": "boolean"
                   }
                 },
                 "required": [
                   "folderId",
                   "modelId",
                   "rawPrompt",
-                  "plannedPrompt",
                   "selectedParams"
                 ]
               }
@@ -2334,6 +3922,516 @@
         }
       }
     },
+    "/api/creator/folders/{id}/contexts": {
+      "get": {
+        "tags": [
+          "Creator contexts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pre-context entries of the folder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FolderContext"
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Creator contexts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": [
+                      "TEXT",
+                      "UPLOAD",
+                      "GENERATION"
+                    ],
+                    "default": "TEXT"
+                  },
+                  "label": {
+                    "type": "string",
+                    "default": ""
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "mediaAssetId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "generationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Context created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderContext"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid source",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/contexts/{contextId}": {
+      "patch": {
+        "tags": [
+          "Creator contexts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "contextId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "label": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  },
+                  "isActive": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Context updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FolderContext"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Context not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Creator contexts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "contextId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Context deleted"
+          },
+          "404": {
+            "description": "Context not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/analyses": {
+      "post": {
+        "tags": [
+          "Creator analyses"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "mediaAssetId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "generationId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "refresh": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Cached or fresh media analysis",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssetAnalysis"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid source",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Asset not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Analysis model not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/storage": {
+      "get": {
+        "tags": [
+          "Creator storage"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "IMAGE",
+                "VIDEO"
+              ]
+            },
+            "required": false,
+            "name": "type",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "UPLOAD",
+                "GENERATION"
+              ]
+            },
+            "required": false,
+            "name": "source",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace media grid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/storage/{assetId}": {
+      "delete": {
+        "tags": [
+          "Creator storage"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "assetId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Asset deleted"
+          },
+          "403": {
+            "description": "Not the uploader or a workspace admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Asset not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/billing/packages": {
+      "get": {
+        "tags": [
+          "Creator billing"
+        ],
+        "responses": {
+          "200": {
+            "description": "Available top-up packages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Package"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/billing/orders": {
+      "post": {
+        "tags": [
+          "Creator billing"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "id"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Order created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateOrderResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Package not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Payment provider not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Creator billing"
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent orders of the active workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Order"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/creator/uploads": {
       "post": {
         "tags": [
@@ -2465,6 +4563,9 @@
                       "format": "uuid"
                     },
                     "default": []
+                  },
+                  "password": {
+                    "type": "string"
                   }
                 },
                 "required": [
@@ -3023,6 +5124,14 @@
                   "apiKey": {
                     "type": "string"
                   },
+                  "modelsPath": {
+                    "type": "string",
+                    "default": "/models"
+                  },
+                  "supportsVideoInput": {
+                    "type": "boolean",
+                    "default": false
+                  },
                   "isActive": {
                     "type": "boolean",
                     "default": true
@@ -3103,6 +5212,12 @@
                   "apiKey": {
                     "type": "string"
                   },
+                  "modelsPath": {
+                    "type": "string"
+                  },
+                  "supportsVideoInput": {
+                    "type": "boolean"
+                  },
                   "isActive": {
                     "type": "boolean"
                   }
@@ -3134,6 +5249,47 @@
           },
           "404": {
             "description": "Provider not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "CMS providers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Provider deleted"
+          },
+          "404": {
+            "description": "Provider not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Fixed provider or render history",
             "content": {
               "application/json": {
                 "schema": {
@@ -3185,10 +5341,178 @@
         }
       }
     },
+    "/api/cms/providers/{id}/remote-models": {
+      "get": {
+        "tags": [
+          "CMS providers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catalog preview without writing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RemoteModel"
+                      }
+                    }
+                  },
+                  "required": [
+                    "models"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Provider not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/providers/{id}/sync-models": {
+      "post": {
+        "tags": [
+          "CMS providers"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catalog synced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Provider not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Provider unreachable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/cms/models": {
       "get": {
         "tags": [
           "CMS models"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "providerId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "TEXT",
+                "IMAGE",
+                "VIDEO"
+              ]
+            },
+            "required": false,
+            "name": "input",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "TEXT",
+                "IMAGE",
+                "VIDEO"
+              ]
+            },
+            "required": false,
+            "name": "output",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "required": false,
+            "name": "active",
+            "in": "query"
+          }
         ],
         "responses": {
           "200": {
@@ -3226,12 +5550,37 @@
                   "displayName": {
                     "type": "string"
                   },
+                  "providerModelId": {
+                    "type": "string"
+                  },
                   "mediaType": {
                     "type": "string",
                     "enum": [
                       "VIDEO",
                       "IMAGE"
                     ]
+                  },
+                  "inputCapabilities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "TEXT",
+                        "IMAGE",
+                        "VIDEO"
+                      ]
+                    }
+                  },
+                  "outputCapabilities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "TEXT",
+                        "IMAGE",
+                        "VIDEO"
+                      ]
+                    }
                   },
                   "allowedParams": {
                     "type": "object",
@@ -3337,11 +5686,20 @@
             "required": false,
             "name": "providerCode",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "providerId",
+            "in": "query"
           }
         ],
         "responses": {
           "200": {
-            "description": "Model templates from the catalog",
+            "description": "Model catalog of a provider, read from the synced rows",
             "content": {
               "application/json": {
                 "schema": {
@@ -3378,6 +5736,37 @@
               "schema": {
                 "type": "object",
                 "properties": {
+                  "displayName": {
+                    "type": "string"
+                  },
+                  "providerModelId": {
+                    "type": "string"
+                  },
+                  "inputCapabilities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "TEXT",
+                        "IMAGE",
+                        "VIDEO"
+                      ]
+                    }
+                  },
+                  "outputCapabilities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "TEXT",
+                        "IMAGE",
+                        "VIDEO"
+                      ]
+                    }
+                  },
+                  "source": {
+                    "type": "string"
+                  },
                   "tokenCost": {
                     "type": "integer"
                   },
@@ -3510,6 +5899,569 @@
           },
           "400": {
             "description": "Invalid contact",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/settings/ai": {
+      "get": {
+        "tags": [
+          "CMS settings"
+        ],
+        "responses": {
+          "200": {
+            "description": "AI model wiring",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "planModelId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "analysisModelId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "videoAnalysisModelId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "defaultVideoModelId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "planModelId",
+                    "analysisModelId",
+                    "videoAnalysisModelId",
+                    "defaultVideoModelId"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "CMS settings"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "planModelId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "analysisModelId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "videoAnalysisModelId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "defaultVideoModelId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "planModelId",
+                  "analysisModelId",
+                  "videoAnalysisModelId",
+                  "defaultVideoModelId"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "AI model wiring saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "planModelId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "analysisModelId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "videoAnalysisModelId": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "defaultVideoModelId": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "planModelId",
+                    "analysisModelId",
+                    "videoAnalysisModelId",
+                    "defaultVideoModelId"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid model or capability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/settings/storage": {
+      "get": {
+        "tags": [
+          "CMS storage"
+        ],
+        "responses": {
+          "200": {
+            "description": "Global storage settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "CMS storage"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "driver": {
+                    "type": "string",
+                    "enum": [
+                      "local",
+                      "s3"
+                    ]
+                  },
+                  "retentionDays": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 365
+                  },
+                  "s3": {
+                    "type": "object",
+                    "properties": {
+                      "endpoint": {
+                        "type": "string"
+                      },
+                      "region": {
+                        "type": "string"
+                      },
+                      "bucket": {
+                        "type": "string"
+                      },
+                      "accessKeyId": {
+                        "type": "string"
+                      },
+                      "secretAccessKey": {
+                        "type": "string"
+                      },
+                      "publicBaseUrl": {
+                        "type": "string"
+                      },
+                      "forcePathStyle": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "endpoint",
+                      "region",
+                      "bucket",
+                      "accessKeyId",
+                      "publicBaseUrl",
+                      "forcePathStyle"
+                    ]
+                  }
+                },
+                "required": [
+                  "driver",
+                  "retentionDays",
+                  "s3"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Storage settings saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/settings/storage/test": {
+      "post": {
+        "tags": [
+          "CMS storage"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "driver": {
+                    "type": "string",
+                    "enum": [
+                      "local",
+                      "s3"
+                    ]
+                  }
+                },
+                "required": [
+                  "driver"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Connection test",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderTest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/settings/storage/usage": {
+      "get": {
+        "tags": [
+          "CMS storage"
+        ],
+        "responses": {
+          "200": {
+            "description": "Asset usage counters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageUsage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/settings/mail": {
+      "get": {
+        "tags": [
+          "CMS settings"
+        ],
+        "responses": {
+          "200": {
+            "description": "Mail settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "CMS settings"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "driver": {
+                    "type": "string",
+                    "enum": [
+                      "smtp",
+                      "log"
+                    ]
+                  },
+                  "fromName": {
+                    "type": "string"
+                  },
+                  "fromEmail": {
+                    "type": "string"
+                  },
+                  "smtp": {
+                    "type": "object",
+                    "properties": {
+                      "host": {
+                        "type": "string"
+                      },
+                      "port": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 65535
+                      },
+                      "secure": {
+                        "type": "boolean"
+                      },
+                      "user": {
+                        "type": "string"
+                      },
+                      "password": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "host",
+                      "port",
+                      "secure",
+                      "user"
+                    ]
+                  }
+                },
+                "required": [
+                  "driver",
+                  "fromName",
+                  "fromEmail",
+                  "smtp"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mail settings saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid settings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/settings/mail/test": {
+      "post": {
+        "tags": [
+          "CMS settings"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "to"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Test mail result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderTest"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/orders": {
+      "get": {
+        "tags": [
+          "CMS orders"
+        ],
+        "responses": {
+          "200": {
+            "description": "Recent orders with workspace names",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CmsOrder"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/orders/{id}/mark-paid": {
+      "post": {
+        "tags": [
+          "CMS orders"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order settled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Workspace"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Order not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Order already settled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/audit-logs": {
+      "get": {
+        "tags": [
+          "CMS audit"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 50
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "before",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit trail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditLog"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid cursor",
             "content": {
               "application/json": {
                 "schema": {

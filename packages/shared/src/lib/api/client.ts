@@ -38,10 +38,23 @@ function errorFromBody(body: unknown): { code: string; message: string } {
   };
 }
 
+function readCsrfToken(): string | null {
+  if (typeof document === "undefined") return null;
+  for (const part of document.cookie.split(";")) {
+    const [name, ...rest] = part.trim().split("=");
+    if (name === "rupakarsa_csrf") return rest.join("=");
+  }
+  return null;
+}
+
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const { method = "GET", body, signal } = options;
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
+  if (method !== "GET") {
+    const csrf = readCsrfToken();
+    if (csrf) headers["x-csrf-token"] = csrf;
+  }
 
   let response: Response;
   try {
@@ -81,11 +94,16 @@ export async function apiUpload<T>(path: string, file: File): Promise<T> {
   const form = new FormData();
   form.append("file", file);
 
+  const headers: Record<string, string> = {};
+  const csrf = readCsrfToken();
+  if (csrf) headers["x-csrf-token"] = csrf;
+
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       method: "POST",
       credentials: "include",
+      headers,
       body: form,
     });
   } catch {

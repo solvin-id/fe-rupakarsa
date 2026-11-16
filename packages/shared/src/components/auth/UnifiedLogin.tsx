@@ -9,12 +9,21 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { Logo } from "../brand";
 import { hasCmsAccess } from "../../lib/auth";
-import { useLoginMutation, useLogoutMutation, useSessionQuery } from "../../hooks/use-session";
-import { Button, Field, TextInput } from "../ui";
+import {
+  useLoginMutation,
+  useLogoutMutation,
+  useSessionQuery,
+  useTotpChallengeMutation,
+} from "../../hooks/use-session";
+import { isLoginChallenge } from "../../lib/types";
+import type { LoginChallenge } from "../../lib/types";
+import { useUiStore } from "../../stores/ui-store";
+import { Button, Field, TextInput, ToastViewport } from "../ui";
 
 export interface UnifiedLoginProps {
   creatorUrl: string;
@@ -33,11 +42,15 @@ export function UnifiedLogin({
 }: UnifiedLoginProps) {
   const sessionQuery = useSessionQuery();
   const loginMutation = useLoginMutation();
+  const totpMutation = useTotpChallengeMutation();
   const logoutMutation = useLogoutMutation();
+  const pushToast = useUiStore((state) => state.pushToast);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [challenge, setChallenge] = useState<LoginChallenge | null>(null);
+  const [code, setCode] = useState("");
 
   const session = sessionQuery.data ?? null;
 
@@ -49,12 +62,41 @@ export function UnifiedLogin({
     event.preventDefault();
     loginMutation.mutate(
       { email: email.trim(), password },
-      { onSuccess: goToCreator },
+      {
+        onSuccess: (result) => {
+          if (isLoginChallenge(result)) {
+            setChallenge(result);
+            setCode("");
+            return;
+          }
+          goToCreator();
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
     );
+  }
+
+  function handleChallengeSubmit(event: React.FormEvent): void {
+    event.preventDefault();
+    if (!challenge) return;
+    totpMutation.mutate(
+      { challengeToken: challenge.challengeToken, code: code.trim() },
+      {
+        onSuccess: goToCreator,
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
+  }
+
+  function resetChallenge(): void {
+    setChallenge(null);
+    setCode("");
+    totpMutation.reset();
   }
 
   const canUseCms = session ? hasCmsAccess(session.user) : false;
   const errorMessage = loginMutation.error?.message ?? null;
+  const challengeError = totpMutation.error?.message ?? null;
 
   return (
     <main className="grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
@@ -125,12 +167,14 @@ export function UnifiedLogin({
           <div className="mb-8">
             <span className="mono-label text-accent-strong">Creator access</span>
             <h2 className="display mt-3 text-4xl text-ink">
-              {session ? "Sesi aktif." : "Selamat datang kembali."}
+              {session ? "Sesi aktif." : challenge ? "Verifikasi 2FA." : "Selamat datang kembali."}
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-muted">
               {session
                 ? "Lanjut ke workspace, atau keluar untuk memakai akun lain."
-                : "Masuk dengan akun kreator yang diberikan Superadmin Rupakarsa."}
+                : challenge
+                  ? "Akun Anda dilindungi verifikasi dua langkah. Masukkan kode dari aplikasi authenticator."
+                  : "Masuk dengan akun kreator yang diberikan Superadmin Rupakarsa."}
             </p>
           </div>
 
@@ -183,6 +227,62 @@ export function UnifiedLogin({
                 </p>
               ) : null}
             </div>
+          ) : challenge ? (
+            <form onSubmit={handleChallengeSubmit} className="card p-6 sm:p-7">
+              <div className="flex items-start gap-3 rounded-2xl border border-border bg-surface-2/60 px-3.5 py-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-strong">
+                  <ShieldCheck className="size-4" aria-hidden />
+                </span>
+                <div>
+                  <p className="text-sm font-medium text-ink">Verifikasi dua langkah</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted">
+                    Masukkan 6 digit kode dari aplikasi authenticator Anda untuk melanjutkan.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <Field label="Kode 2FA" htmlFor="login-totp">
+                  <TextInput
+                    id="login-totp"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={code}
+                    onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                    placeholder="000000"
+                    className="text-center font-mono text-lg tracking-[0.4em]"
+                    required
+                  />
+                </Field>
+              </div>
+
+              {challengeError ? (
+                <p className="mt-4 rounded-xl border border-danger/20 bg-danger/5 px-3.5 py-2.5 text-sm leading-relaxed text-danger">
+                  {challengeError}
+                </p>
+              ) : null}
+
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                className="mt-5 w-full"
+                loading={totpMutation.isPending}
+                disabled={code.length !== 6}
+                icon={<ArrowRight className="size-4" aria-hidden />}
+              >
+                Verifikasi & masuk
+              </Button>
+
+              <Button
+                variant="ghost"
+                className="mt-2 w-full"
+                onClick={resetChallenge}
+                disabled={totpMutation.isPending}
+              >
+                Kembali
+              </Button>
+            </form>
           ) : (
             <form onSubmit={handleSubmit} className="card p-6 sm:p-7">
               <div className="flex flex-col gap-4">
@@ -224,6 +324,14 @@ export function UnifiedLogin({
                     </button>
                   </div>
                 </Field>
+                <div className="flex justify-end">
+                  <Link
+                    href="/reset-password"
+                    className="text-xs font-medium text-accent-strong transition-colors hover:text-accent"
+                  >
+                    Lupa password?
+                  </Link>
+                </div>
               </div>
 
               {errorMessage ? (
@@ -243,6 +351,24 @@ export function UnifiedLogin({
                 Masuk ke Creator
               </Button>
 
+              <p className="mt-4 text-center text-[11px] leading-relaxed text-muted">
+                Dengan masuk, Anda menyetujui{" "}
+                <Link
+                  href="/terms"
+                  className="font-medium text-ink underline decoration-border-strong underline-offset-2 transition-colors hover:text-accent-strong"
+                >
+                  Ketentuan
+                </Link>{" "}
+                dan{" "}
+                <Link
+                  href="/privacy"
+                  className="font-medium text-ink underline decoration-border-strong underline-offset-2 transition-colors hover:text-accent-strong"
+                >
+                  Kebijakan Privasi
+                </Link>
+                .
+              </p>
+
               <p className="mt-4 rounded-xl border border-border bg-surface-2/60 px-3.5 py-2.5 text-[11px] leading-relaxed text-muted">
                 Akun dibuat oleh Superadmin Rupakarsa. Hubungi admin bila Anda belum memiliki
                 kredensial masuk.
@@ -261,6 +387,7 @@ export function UnifiedLogin({
           </div>
         </div>
       </section>
+      <ToastViewport />
     </main>
   );
 }

@@ -114,3 +114,59 @@ export function useUploadReferenceMutation() {
     mutationFn: (file: File) => creatorApi.uploadReference(file),
   });
 }
+
+export function useFolderContextsQuery(folderId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.contexts(folderId ?? "none"),
+    queryFn: () => creatorApi.folderContexts(folderId ?? ""),
+    enabled: folderId !== null,
+  });
+}
+
+export function useCreateFolderContextMutation(folderId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      source: "TEXT" | "UPLOAD" | "GENERATION";
+      label?: string;
+      text?: string;
+      mediaAssetId?: string;
+      generationId?: string;
+    }) => creatorApi.createFolderContext(folderId, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contexts(folderId) });
+    },
+  });
+}
+
+export function useUpdateFolderContextMutation(folderId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { contextId: string; label?: string; text?: string; isActive?: boolean }) =>
+      creatorApi.updateFolderContext(input.contextId, {
+        label: input.label,
+        text: input.text,
+        isActive: input.isActive,
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contexts(folderId) });
+    },
+  });
+}
+
+export function useDeleteFolderContextMutation(folderId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (contextId: string) => creatorApi.deleteFolderContext(contextId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.contexts(folderId) });
+    },
+  });
+}
+
+export function useAnalyzeAssetMutation() {
+  return useMutation({
+    mutationFn: (input: { mediaAssetId?: string; generationId?: string; refresh?: boolean }) =>
+      creatorApi.analyzeAsset(input),
+  });
+}

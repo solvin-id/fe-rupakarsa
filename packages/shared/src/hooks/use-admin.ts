@@ -27,7 +27,7 @@ export function useAdminProvidersQuery() {
 }
 
 export function useAdminModelsQuery() {
-  return useQuery({ queryKey: queryKeys.admin.models, queryFn: cmsApi.models });
+  return useQuery({ queryKey: queryKeys.admin.models, queryFn: () => cmsApi.models() });
 }
 
 export function useAdminModelTemplatesQuery(providerCode: string) {
@@ -157,6 +157,8 @@ export function useUpdateProviderMutation() {
         name: input.name,
         baseUrl: input.baseUrl,
         apiKey: input.apiKey,
+        modelsPath: input.modelsPath,
+        supportsVideoInput: input.supportsVideoInput,
         isActive: input.isActive,
       }),
     onSuccess: () => {
@@ -186,6 +188,10 @@ export function useUpdateModelMutation() {
   return useMutation({
     mutationFn: (input: { modelId: string } & UpdateModelInput) =>
       cmsApi.updateModel(input.modelId, {
+        displayName: input.displayName,
+        providerModelId: input.providerModelId,
+        inputCapabilities: input.inputCapabilities,
+        outputCapabilities: input.outputCapabilities,
         tokenCost: input.tokenCost,
         allowedParams: input.allowedParams,
         isActive: input.isActive,
@@ -205,4 +211,114 @@ export function useUpdateContactMutation() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.config });
     },
   });
+}
+
+export function useAdminModelsFilteredQuery(filters: {
+  providerId?: string;
+  input?: "TEXT" | "IMAGE" | "VIDEO";
+  output?: "TEXT" | "IMAGE" | "VIDEO";
+  q?: string;
+  active?: boolean;
+}) {
+  return useQuery({
+    queryKey: [...queryKeys.admin.models, filters],
+    queryFn: () => cmsApi.models(filters),
+  });
+}
+
+export function useSyncProviderModelsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (providerId: string) => cmsApi.syncProviderModels(providerId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.providers });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.models });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.models });
+    },
+  });
+}
+
+export function useRemoteModelsQuery(providerId: string | null) {
+  return useQuery({
+    queryKey: [...queryKeys.admin.providers, "remote", providerId],
+    queryFn: () => cmsApi.remoteModels(providerId ?? ""),
+    enabled: providerId !== null,
+  });
+}
+
+export function useDeleteProviderMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (providerId: string) => cmsApi.deleteProvider(providerId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.providers });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.models });
+    },
+  });
+}
+
+export function useAdminStorageSettingsQuery() {
+  return useQuery({ queryKey: queryKeys.admin.storage, queryFn: cmsApi.storageSettings });
+}
+
+export function useAdminStorageUsageQuery() {
+  return useQuery({ queryKey: queryKeys.admin.storageUsage, queryFn: cmsApi.storageUsage });
+}
+
+export function useUpdateStorageSettingsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof cmsApi.updateStorageSettings>[0]) =>
+      cmsApi.updateStorageSettings(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.storage });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.storageUsage });
+    },
+  });
+}
+
+export function useTestStorageMutation() {
+  return useMutation({
+    mutationFn: (driver: "local" | "s3") => cmsApi.testStorage(driver),
+  });
+}
+
+export function useAdminMailSettingsQuery() {
+  return useQuery({ queryKey: queryKeys.admin.mail, queryFn: cmsApi.mailSettings });
+}
+
+export function useUpdateMailSettingsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: Parameters<typeof cmsApi.updateMailSettings>[0]) =>
+      cmsApi.updateMailSettings(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.mail });
+    },
+  });
+}
+
+export function useTestMailMutation() {
+  return useMutation({
+    mutationFn: (to: string) => cmsApi.testMail(to),
+  });
+}
+
+export function useAdminOrdersQuery() {
+  return useQuery({ queryKey: queryKeys.admin.orders, queryFn: cmsApi.orders });
+}
+
+export function useMarkOrderPaidMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (orderId: string) => cmsApi.markOrderPaid(orderId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.orders });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.workspaces });
+    },
+  });
+}
+
+export function useAdminAuditLogsQuery() {
+  return useQuery({ queryKey: queryKeys.admin.audit, queryFn: () => cmsApi.auditLogs() });
 }

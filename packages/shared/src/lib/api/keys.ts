@@ -1,3 +1,5 @@
+import type { StorageFilters } from "./endpoints";
+
 export const queryKeys = {
   session: ["session"] as const,
   config: ["config"] as const,
@@ -6,7 +8,13 @@ export const queryKeys = {
   folders: ["folders"] as const,
   generations: (folderId: string) => ["generations", folderId] as const,
   generation: (id: string) => ["generation", id] as const,
+  contexts: (folderId: string) => ["contexts", folderId] as const,
   models: ["models"] as const,
+  drive: (workspaceId: string) => ["drive", workspaceId] as const,
+  storage: ["storage"] as const,
+  storageList: (filters: StorageFilters) => ["storage", filters] as const,
+  billing: ["billing"] as const,
+  orders: ["orders"] as const,
   admin: {
     accounts: ["admin", "accounts"] as const,
     workspaces: ["admin", "workspaces"] as const,
@@ -14,5 +22,10 @@ export const queryKeys = {
     models: ["admin", "models"] as const,
     templates: (providerCode: string) => ["admin", "templates", providerCode] as const,
     contact: ["admin", "contact"] as const,
+    storage: ["admin", "storage"] as const,
+    storageUsage: ["admin", "storage", "usage"] as const,
+    mail: ["admin", "mail"] as const,
+    orders: ["admin", "orders"] as const,
+    audit: ["admin", "audit"] as const,
   },
 };

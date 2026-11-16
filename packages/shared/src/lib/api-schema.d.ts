@@ -29,6 +29,15 @@ export interface paths {
                         "application/json": components["schemas"]["Health"];
                     };
                 };
+                /** @description One dependency is unhealthy */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Health"];
+                    };
+                };
             };
         };
         put?: never;
@@ -74,6 +83,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/public/midtrans/webhook": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        order_id: string;
+                        status_code: string;
+                        gross_amount: string;
+                        signature_key: string;
+                        transaction_status: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Acknowledged */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+                /** @description Invalid signature */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/creator/auth/login": {
         parameters: {
             query?: never;
@@ -99,13 +164,13 @@ export interface paths {
                 };
             };
             responses: {
-                /** @description Session payload */
+                /** @description Session payload, or a 2FA challenge when TOTP is enabled */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["SessionPayload"];
+                        "application/json": components["schemas"]["LoginResponse"];
                     };
                 };
                 /** @description Invalid credentials or inactive account */
@@ -132,6 +197,198 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/creator/auth/totp/challenge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        challengeToken: string;
+                        code: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Session payload after 2FA */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SessionPayload"];
+                    };
+                };
+                /** @description Wrong 2FA code */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Expired challenge */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/auth/totp/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Enrolment material */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TotpEnrollment"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/auth/totp/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        code: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description 2FA activated */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid code */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/auth/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        enabled: boolean;
+                        code?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description 2FA disabled */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Invalid code */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/api/creator/auth/logout": {
@@ -282,6 +539,210 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/auth/password-reset/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        email: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Always accepted; never reveals whether the account exists */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            ok: boolean;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/auth/password-reset/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        token: string;
+                        newPassword: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Password replaced */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Expired or used token, or weak password */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/account/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Portable copy of the caller's data (never includes password_hash) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            exportedAt: string;
+                            user: {
+                                [key: string]: unknown;
+                            };
+                            memberships: {
+                                [key: string]: unknown;
+                            }[];
+                            workspaces: {
+                                [key: string]: unknown;
+                            }[];
+                            folders: {
+                                [key: string]: unknown;
+                            }[];
+                            generations: {
+                                [key: string]: unknown;
+                            }[];
+                            contexts: {
+                                [key: string]: unknown;
+                            }[];
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        password: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Account scheduled for deletion (30 day retention) */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing password */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Wrong password */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -939,6 +1400,191 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/creator/workspaces/{id}/storage/drive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Workspace Drive status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WorkspaceDrive"];
+                    };
+                };
+                /** @description Not a member */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        serviceAccountEmail: string;
+                        privateKey: string;
+                        folderId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Drive connected */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProviderTest"];
+                    };
+                };
+                /** @description Invalid service account JSON */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Admin only */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Drive probe failed */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Drive disconnected */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Admin only */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/workspaces/{id}/storage/drive/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Drive probe result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProviderTest"];
+                    };
+                };
+                /** @description Admin only */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Drive not connected */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/creator/folders": {
         parameters: {
             query?: never;
@@ -1170,7 +1816,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Active models */
+                /** @description Active renderable models */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -1209,13 +1855,17 @@ export interface paths {
                 content: {
                     "application/json": {
                         /** Format: uuid */
+                        folderId: string;
+                        /** Format: uuid */
                         modelId: string;
                         rawPrompt: string;
                         durationSec?: number;
                         resolution: string;
                         aspectRatio: string;
-                        /** @default false */
-                        hasReference?: boolean;
+                        /** @default [] */
+                        attachmentKeys?: string[];
+                        /** @default [] */
+                        contextIds?: string[];
                     };
                 };
             };
@@ -1307,14 +1957,18 @@ export interface paths {
                         /** Format: uuid */
                         modelId: string;
                         rawPrompt: string;
-                        plannedPrompt: string;
-                        referenceImageUrl?: string | null;
+                        /** @default true */
+                        planMode?: boolean;
+                        finalPrompt?: string | null;
+                        /** @default [] */
+                        attachmentKeys?: string[];
+                        /** @default [] */
+                        contextIds?: string[];
                         selectedParams: {
                             durationSec?: number;
                             resolution: string;
                             aspectRatio: string;
                         };
-                        simulateFailure?: boolean;
                     };
                 };
             };
@@ -1446,6 +2100,478 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/creator/folders/{id}/contexts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Pre-context entries of the folder */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FolderContext"][];
+                    };
+                };
+                /** @description Folder not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /**
+                         * @default TEXT
+                         * @enum {string}
+                         */
+                        source?: "TEXT" | "UPLOAD" | "GENERATION";
+                        /** @default  */
+                        label?: string;
+                        text?: string;
+                        /** Format: uuid */
+                        mediaAssetId?: string;
+                        /** Format: uuid */
+                        generationId?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Context created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FolderContext"];
+                    };
+                };
+                /** @description Invalid source */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Folder not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/contexts/{contextId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    contextId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Context deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Context not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    contextId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        label?: string;
+                        text?: string;
+                        isActive?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Context updated */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["FolderContext"];
+                    };
+                };
+                /** @description Context not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/creator/analyses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        mediaAssetId?: string;
+                        /** Format: uuid */
+                        generationId?: string;
+                        refresh?: boolean;
+                    };
+                };
+            };
+            responses: {
+                /** @description Cached or fresh media analysis */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AssetAnalysis"];
+                    };
+                };
+                /** @description Invalid source */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Asset not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Analysis model not configured */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    type?: "IMAGE" | "VIDEO";
+                    source?: "UPLOAD" | "GENERATION";
+                    q?: string;
+                    cursor?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Workspace media grid */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StorageList"];
+                    };
+                };
+                /** @description Invalid cursor */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/storage/{assetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    assetId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Asset deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Not the uploader or a workspace admin */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Asset not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/billing/packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Available top-up packages */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Package"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/creator/billing/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Recent orders of the active workspace */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Order"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        id: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Order created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CreateOrderResponse"];
+                    };
+                };
+                /** @description Package not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Payment provider not configured */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/creator/uploads": {
         parameters: {
             query?: never;
@@ -1567,6 +2693,7 @@ export interface paths {
                         workspaceMode?: "PERSONAL" | "EXISTING";
                         /** @default [] */
                         workspaceIds?: string[];
+                        password?: string;
                     };
                 };
             };
@@ -2072,6 +3199,10 @@ export interface paths {
                         code: string;
                         baseUrl: string;
                         apiKey: string;
+                        /** @default /models */
+                        modelsPath?: string;
+                        /** @default false */
+                        supportsVideoInput?: boolean;
                         /** @default true */
                         isActive?: boolean;
                     };
@@ -2123,7 +3254,44 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Provider deleted */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Provider not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Fixed provider or render history */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch: {
@@ -2141,6 +3309,8 @@ export interface paths {
                         name?: string;
                         baseUrl?: string;
                         apiKey?: string;
+                        modelsPath?: string;
+                        supportsVideoInput?: boolean;
                         isActive?: boolean;
                     };
                 };
@@ -2223,7 +3393,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/cms/models": {
+    "/api/cms/providers/{id}/remote-models": {
         parameters: {
             query?: never;
             header?: never;
@@ -2233,6 +3403,124 @@ export interface paths {
         get: {
             parameters: {
                 query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Catalog preview without writing */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            models: components["schemas"]["RemoteModel"][];
+                        };
+                    };
+                };
+                /** @description Provider not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Provider unreachable */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/providers/{id}/sync-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Catalog synced */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SyncResult"];
+                    };
+                };
+                /** @description Provider not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Provider unreachable */
+                502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    providerId?: string;
+                    input?: "TEXT" | "IMAGE" | "VIDEO";
+                    output?: "TEXT" | "IMAGE" | "VIDEO";
+                    q?: string;
+                    active?: "true" | "false";
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -2265,8 +3553,11 @@ export interface paths {
                         providerId: string;
                         code: string;
                         displayName: string;
+                        providerModelId?: string;
                         /** @enum {string} */
                         mediaType: "VIDEO" | "IMAGE";
+                        inputCapabilities?: ("TEXT" | "IMAGE" | "VIDEO")[];
+                        outputCapabilities?: ("TEXT" | "IMAGE" | "VIDEO")[];
                         allowedParams: {
                             durations?: number[];
                             resolutions: string[];
@@ -2334,6 +3625,7 @@ export interface paths {
             parameters: {
                 query?: {
                     providerCode?: string;
+                    providerId?: string;
                 };
                 header?: never;
                 path?: never;
@@ -2341,7 +3633,7 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Model templates from the catalog */
+                /** @description Model catalog of a provider, read from the synced rows */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -2385,6 +3677,11 @@ export interface paths {
             requestBody?: {
                 content: {
                     "application/json": {
+                        displayName?: string;
+                        providerModelId?: string;
+                        inputCapabilities?: ("TEXT" | "IMAGE" | "VIDEO")[];
+                        outputCapabilities?: ("TEXT" | "IMAGE" | "VIDEO")[];
+                        source?: string;
                         tokenCost?: number;
                         allowedParams?: {
                             durations?: number[];
@@ -2498,14 +3795,516 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cms/settings/ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description AI model wiring */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            planModelId: string | null;
+                            analysisModelId: string | null;
+                            videoAnalysisModelId: string | null;
+                            defaultVideoModelId: string | null;
+                        };
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        planModelId: string | null;
+                        /** Format: uuid */
+                        analysisModelId: string | null;
+                        /** Format: uuid */
+                        videoAnalysisModelId: string | null;
+                        /** Format: uuid */
+                        defaultVideoModelId: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description AI model wiring saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            planModelId: string | null;
+                            analysisModelId: string | null;
+                            videoAnalysisModelId: string | null;
+                            defaultVideoModelId: string | null;
+                        };
+                    };
+                };
+                /** @description Invalid model or capability */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/settings/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Global storage settings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StorageSettings"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        driver: "local" | "s3";
+                        retentionDays: number;
+                        s3: {
+                            endpoint: string;
+                            region: string;
+                            bucket: string;
+                            accessKeyId: string;
+                            secretAccessKey?: string;
+                            publicBaseUrl: string;
+                            forcePathStyle: boolean;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Storage settings saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StorageSettings"];
+                    };
+                };
+                /** @description Invalid settings */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/settings/storage/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        driver: "local" | "s3";
+                    };
+                };
+            };
+            responses: {
+                /** @description Connection test */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProviderTest"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/settings/storage/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Asset usage counters */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StorageUsage"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/settings/mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Mail settings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MailSettings"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        driver: "smtp" | "log";
+                        fromName: string;
+                        fromEmail: string;
+                        smtp: {
+                            host: string;
+                            port: number;
+                            secure: boolean;
+                            user: string;
+                            password?: string;
+                        };
+                    };
+                };
+            };
+            responses: {
+                /** @description Mail settings saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MailSettings"];
+                    };
+                };
+                /** @description Invalid settings */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/settings/mail/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        to: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Test mail result */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProviderTest"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Recent orders with workspace names */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CmsOrder"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/orders/{id}/mark-paid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Order settled */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Workspace"];
+                    };
+                };
+                /** @description Order not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Order already settled */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/audit-logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                    before?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Audit trail */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuditLog"][];
+                    };
+                };
+                /** @description Invalid cursor */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         Health: {
             /** @enum {string} */
-            status: "ok";
+            status: "ok" | "degraded";
             db: boolean;
+            redis: boolean;
+            worker: boolean;
         };
         AdminContact: {
             name: string;
@@ -2524,6 +4323,20 @@ export interface components {
             features: {
                 simulation: boolean;
             };
+            planModel: {
+                id: string;
+                name: string;
+                inputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
+            } | null;
+            defaults: {
+                videoModelId: string | null;
+            };
+        };
+        ErrorResponse: {
+            error: {
+                code: string;
+                message: string;
+            };
         };
         User: {
             id: string;
@@ -2534,6 +4347,7 @@ export interface components {
             role: "USER" | "SUPERADMIN";
             cmsAccess: boolean;
             isActive: boolean;
+            totpEnabled: boolean;
             createdAt: string;
         };
         Workspace: {
@@ -2561,11 +4375,15 @@ export interface components {
             /** @enum {string} */
             activeWorkspaceRole: "OWNER" | "ADMIN" | "MEMBER";
         };
-        ErrorResponse: {
-            error: {
-                code: string;
-                message: string;
-            };
+        LoginResponse: components["schemas"]["SessionPayload"] | {
+            /** @enum {boolean} */
+            totpRequired: true;
+            challengeToken: string;
+        };
+        TotpEnrollment: {
+            secret: string;
+            otpauthUrl: string;
+            qrDataUrl: string;
         };
         WorkspaceJoinRequest: {
             id: string;
@@ -2605,6 +4423,17 @@ export interface components {
                 email: string;
             };
         };
+        WorkspaceDrive: {
+            connected: boolean;
+            serviceAccountEmail: string;
+            folderId: string;
+            connectedAt: string | null;
+            lastError: string | null;
+        };
+        ProviderTest: {
+            ok: boolean;
+            message: string;
+        };
         Folder: {
             id: string;
             workspaceId: string;
@@ -2630,6 +4459,10 @@ export interface components {
             mediaType: "VIDEO" | "IMAGE";
             rawPrompt: string;
             plannedPrompt: string;
+            planMode: boolean;
+            finalPrompt: string;
+            analysisSnapshot: string;
+            preContextSnapshot: string;
             referenceImageUrl: string | null;
             selectedParams: {
                 durationSec?: number;
@@ -2641,6 +4474,9 @@ export interface components {
             status: "QUEUED" | "RENDERING" | "COMPLETED" | "FAILED";
             externalJobId: string | null;
             outputUrl: string | null;
+            outputMime: string | null;
+            outputSize: number;
+            outputPurgedAt: string | null;
             errorMessage: string | null;
             refunded: boolean;
             createdAt: string;
@@ -2651,8 +4487,12 @@ export interface components {
             providerId: string;
             code: string;
             displayName: string;
+            providerModelId: string;
             /** @enum {string} */
             mediaType: "VIDEO" | "IMAGE";
+            inputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
+            outputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
+            source: string;
             allowedParams: {
                 durations?: number[];
                 resolutions: string[];
@@ -2660,6 +4500,7 @@ export interface components {
             };
             tokenCost: number;
             isActive: boolean;
+            isDefault: boolean;
         };
         PlanResponse: {
             blueprint: {
@@ -2672,15 +4513,104 @@ export interface components {
                 usesFreeQuota: boolean;
             };
             workspace: components["schemas"]["Workspace"];
+            analysis: {
+                attachments: {
+                    key: string;
+                    text: string;
+                }[];
+                preContext: string;
+            };
         };
         CreateGenerationResponse: {
             generation: components["schemas"]["Generation"];
             workspace: components["schemas"]["Workspace"];
         };
-        UploadResponse: {
-            url: string;
+        FolderContext: {
+            id: string;
+            workspaceId: string;
+            folderId: string;
+            /** @enum {string} */
+            source: "TEXT" | "UPLOAD" | "GENERATION";
+            label: string;
+            text: string;
+            mediaAssetId: string | null;
+            generationId: string | null;
+            createdByUserId: string | null;
+            isActive: boolean;
+            createdAt: string;
+            updatedAt: string;
+        };
+        AssetAnalysis: {
+            /** @enum {string} */
+            sourceKind: "UPLOAD" | "GENERATION";
+            sourceId: string;
+            text: string;
+            structured: {
+                [key: string]: unknown;
+            };
+            modelId: string | null;
+            cached: boolean;
+        };
+        StorageItem: {
+            id: string;
+            key: string;
+            name: string;
             mime: string;
             size: number;
+            width: number | null;
+            height: number | null;
+            durationMs: number | null;
+            /** @enum {string} */
+            driver: "local" | "s3" | "gdrive";
+            /** @enum {string} */
+            source: "UPLOAD" | "GENERATION";
+            url: string;
+            generationId: string | null;
+            modelName: string | null;
+            createdAt: string;
+            purgedAt: string | null;
+        };
+        StorageList: {
+            items: components["schemas"]["StorageItem"][];
+            nextCursor: string | null;
+            totals: {
+                count: number;
+                bytes: number;
+                images: number;
+                videos: number;
+            };
+        };
+        Package: {
+            id: string;
+            tokens: number;
+            planQuota: number;
+            priceRupiah: number;
+        };
+        Order: {
+            id: string;
+            workspaceId: string;
+            userId: string | null;
+            tokens: number;
+            planQuota: number;
+            amountRupiah: number;
+            provider: string;
+            providerRef: string | null;
+            /** @enum {string} */
+            status: "PENDING" | "PAID" | "EXPIRED" | "FAILED";
+            paidAt: string | null;
+            createdAt: string;
+        };
+        CreateOrderResponse: {
+            order: components["schemas"]["Order"];
+            redirectUrl: string | null;
+        };
+        UploadResponse: {
+            id: string;
+            url: string;
+            key: string;
+            mime: string;
+            size: number;
+            durationMs: number | null;
         };
         AccountCreated: {
             account: components["schemas"]["User"];
@@ -2696,12 +4626,29 @@ export interface components {
             name: string;
             baseUrl: string;
             apiKeyMasked: string;
+            /** @enum {string} */
+            kind: "HIGGSFIELD" | "OPENAI_COMPATIBLE";
+            isFixed: boolean;
+            modelsPath: string;
+            supportsVideoInput: boolean;
+            lastSyncedAt: string | null;
+            syncError: string | null;
             isActive: boolean;
             updatedAt: string;
         };
-        ProviderTest: {
-            ok: boolean;
-            message: string;
+        RemoteModel: {
+            providerModelId: string;
+            displayName: string;
+            inputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
+            outputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
+            /** @enum {string} */
+            mediaType: "VIDEO" | "IMAGE";
+        };
+        SyncResult: {
+            added: number;
+            updated: number;
+            skipped: number;
+            models: components["schemas"]["AiModel"][];
         };
         ModelTemplate: {
             providerCode: string;
@@ -2715,6 +4662,61 @@ export interface components {
                 aspectRatios: string[];
             };
             tokenCost: number;
+        };
+        StorageSettings: {
+            /** @enum {string} */
+            driver: "local" | "s3";
+            retentionDays: number;
+            s3: {
+                endpoint: string;
+                region: string;
+                bucket: string;
+                accessKeyId: string;
+                publicBaseUrl: string;
+                forcePathStyle: boolean;
+                secretAccessKeyMasked: string;
+            };
+            workspaces: {
+                id: string;
+                name: string;
+                driveConnected: boolean;
+                folderIdMasked: string;
+                lastError: string | null;
+                connectedAt: string | null;
+            }[];
+        };
+        StorageUsage: {
+            active: number;
+            bytes: number;
+            expired: number;
+        };
+        MailSettings: {
+            /** @enum {string} */
+            driver: "smtp" | "log";
+            fromName: string;
+            fromEmail: string;
+            smtp: {
+                host: string;
+                port: number;
+                secure: boolean;
+                user: string;
+                passwordMasked: string;
+            };
+        };
+        CmsOrder: components["schemas"]["Order"] & {
+            workspaceName: string;
+        };
+        AuditLog: {
+            id: string;
+            actorUserId: string | null;
+            action: string;
+            targetType: string;
+            targetId: string;
+            metadata: {
+                [key: string]: unknown;
+            };
+            ip: string;
+            createdAt: string;
         };
     };
     responses: never;
