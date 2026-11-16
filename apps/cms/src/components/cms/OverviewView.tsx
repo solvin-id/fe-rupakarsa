@@ -13,13 +13,13 @@ import {
 import Link from "next/link";
 
 import { formatTokens } from "@rupakarsa/shared/lib/format";
-import { readTenantWallet } from "@rupakarsa/shared/lib/tenant-wallet-cookie";
 import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
+import { useWorkspaceStore } from "@rupakarsa/shared/stores/workspace-store";
 
 const STEPS = [
   {
     title: "Akun dibuat sebagai USER",
-    description: "Setiap akun baru default kreator. Tidak ada akses CMS otomatis.",
+    description: "Setiap akun baru default kreator dan mendapat satu workspace personal.",
   },
   {
     title: "Superadmin memberi akses CMS",
@@ -32,17 +32,14 @@ const STEPS = [
 ];
 
 export function OverviewView() {
-  const tenants = useAdminStore((state) => state.tenants);
-  const users = useAdminStore((state) => state.users);
+  const accounts = useAdminStore((state) => state.accounts);
   const providers = useAdminStore((state) => state.providers);
   const models = useAdminStore((state) => state.models);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
 
-  const activeTenants = tenants.filter((tenant) => tenant.isActive).length;
-  const activeUsers = users.filter((user) => user.isActive).length;
-  const totalTokens = tenants.reduce(
-    (total, tenant) => total + (readTenantWallet(tenant.id)?.tokenBalance ?? tenant.tokenBalance),
-    0,
-  );
+  const activeWorkspaces = workspaces.filter((workspace) => workspace.isActive).length;
+  const activeUsers = accounts.filter((account) => account.isActive).length;
+  const totalTokens = workspaces.reduce((total, workspace) => total + workspace.tokenBalance, 0);
   const activeModels = models.filter((model) => model.isActive).length;
   const activeProviders = providers.filter((provider) => provider.isActive).length;
 
@@ -55,7 +52,7 @@ export function OverviewView() {
             Kendali platform
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-            Pantau tenant, akses CMS, token beredar, dan kesiapan provider dalam satu layar.
+            Pantau workspace, akses CMS, token beredar, dan kesiapan provider dalam satu layar.
           </p>
         </div>
         <Link
@@ -69,10 +66,30 @@ export function OverviewView() {
 
       <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Tenant", value: formatTokens(tenants.length), hint: `${activeTenants} aktif`, icon: Building2 },
-          { label: "Total user", value: formatTokens(users.length), hint: `${activeUsers} aktif`, icon: Users },
-          { label: "Token beredar", value: formatTokens(totalTokens), hint: "saldo seluruh tenant", icon: CircleDollarSign },
-          { label: "Model aktif", value: formatTokens(activeModels), hint: `${activeProviders} provider aktif`, icon: Settings2 },
+          {
+            label: "Workspace",
+            value: formatTokens(workspaces.length),
+            hint: `${activeWorkspaces} aktif`,
+            icon: Building2,
+          },
+          {
+            label: "Total user",
+            value: formatTokens(accounts.length),
+            hint: `${activeUsers} aktif`,
+            icon: Users,
+          },
+          {
+            label: "Token beredar",
+            value: formatTokens(totalTokens),
+            hint: "saldo seluruh workspace",
+            icon: CircleDollarSign,
+          },
+          {
+            label: "Model aktif",
+            value: formatTokens(activeModels),
+            hint: `${activeProviders} provider aktif`,
+            icon: Settings2,
+          },
         ].map((item) => {
           const Icon = item.icon;
           return (
@@ -108,28 +125,26 @@ export function OverviewView() {
           </div>
 
           <div className="mt-4 overflow-hidden rounded-2xl border border-border">
-            {users.map((user) => {
-              const hasAccess = user.role === "SUPERADMIN" || user.cmsAccess;
+            {accounts.map((account) => {
+              const hasAccess = account.role === "SUPERADMIN" || account.cmsAccess;
               return (
                 <div
-                  key={user.id}
+                  key={account.id}
                   className="flex items-center gap-3 border-b border-border/60 px-4 py-3 last:border-b-0"
                 >
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-ink text-[11px] font-semibold text-canvas">
-                    {user.fullName.slice(0, 1).toUpperCase()}
+                    {account.fullName.slice(0, 1).toUpperCase()}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-xs font-medium text-ink">{user.fullName}</p>
-                    <p className="truncate text-[10px] text-muted">{user.email}</p>
+                    <p className="truncate text-xs font-medium text-ink">{account.fullName}</p>
+                    <p className="truncate text-[10px] text-muted">{account.email}</p>
                   </div>
                   <span className="hidden rounded-full border border-border px-2 py-0.5 text-[9px] text-muted sm:inline">
-                    {user.role}
+                    {account.role}
                   </span>
                   <span
                     className={`rounded-full px-2 py-0.5 text-[9px] font-medium ${
-                      hasAccess
-                        ? "bg-success/10 text-success"
-                        : "bg-canvas-2 text-muted"
+                      hasAccess ? "bg-success/10 text-success" : "bg-canvas-2 text-muted"
                     }`}
                   >
                     {hasAccess ? "CMS" : "Creator"}
@@ -154,9 +169,7 @@ export function OverviewView() {
           <ol className="mt-4 flex flex-col gap-3">
             {STEPS.map((step, index) => (
               <li key={step.title} className="flex gap-3">
-                <span className="mono-label mt-0.5 text-accent-strong">
-                  0{index + 1}
-                </span>
+                <span className="mono-label mt-0.5 text-accent-strong">0{index + 1}</span>
                 <div>
                   <p className="text-xs font-medium text-ink">{step.title}</p>
                   <p className="mt-0.5 text-[10px] leading-relaxed text-muted">
@@ -171,10 +184,30 @@ export function OverviewView() {
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { href: "/tenants", label: "Tenants", description: "Kantong token, plan gratis, dan status tenant.", icon: Building2 },
-          { href: "/users", label: "Users & akses", description: "Daftarkan user dan atur akses CMS.", icon: UserCog },
-          { href: "/providers", label: "Providers", description: "API key Kenari AI, Higgsfield, R2.", icon: KeyRound },
-          { href: "/models", label: "Models & tarif", description: "Aktivasi model dan tarif token.", icon: Settings2 },
+          {
+            href: "/workspaces",
+            label: "Workspaces",
+            description: "Kantong token, plan gratis, dan status workspace.",
+            icon: Building2,
+          },
+          {
+            href: "/users",
+            label: "Users & akses",
+            description: "Daftarkan user dan atur akses CMS.",
+            icon: UserCog,
+          },
+          {
+            href: "/providers",
+            label: "Providers",
+            description: "API key Kenari AI, Higgsfield, R2.",
+            icon: KeyRound,
+          },
+          {
+            href: "/models",
+            label: "Models & tarif",
+            description: "Aktivasi model dan tarif token.",
+            icon: Settings2,
+          },
         ].map((item) => {
           const Icon = item.icon;
           return (
@@ -192,7 +225,10 @@ export function OverviewView() {
                   {item.description}
                 </p>
               </div>
-              <ArrowRight className="ml-auto mt-1 size-3.5 text-muted/50 transition-transform group-hover:translate-x-0.5 group-hover:text-ink" aria-hidden />
+              <ArrowRight
+                className="ml-auto mt-1 size-3.5 text-muted/50 transition-transform group-hover:translate-x-0.5 group-hover:text-ink"
+                aria-hidden
+              />
             </Link>
           );
         })}
