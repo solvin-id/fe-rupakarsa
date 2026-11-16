@@ -43,6 +43,7 @@ export function UsersView() {
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [customPassword, setCustomPassword] = useState("");
   const [role, setRole] = useState<Role>("USER");
   const [grantCms, setGrantCms] = useState(false);
   const [workspaceMode, setWorkspaceMode] = useState<AccountWorkspaceMode>("PERSONAL");
@@ -108,6 +109,7 @@ export function UsersView() {
   function openCreate(): void {
     setFullName("");
     setEmail("");
+    setCustomPassword("");
     setRole("USER");
     setGrantCms(false);
     setWorkspaceMode("PERSONAL");
@@ -139,6 +141,11 @@ export function UsersView() {
       pushToast("error", "Pilih minimal satu workspace.");
       return;
     }
+    const password = customPassword.trim();
+    if (password.length > 0 && !/^(?=.*[A-Za-z])(?=.*\d).{10,72}$/.test(password)) {
+      pushToast("error", "Password minimal 10 karakter dan harus memuat huruf dan angka.");
+      return;
+    }
 
     const primaryWorkspaceId = defaultWorkspaceId || selectedWorkspaceIds[0] || "";
     const workspaceIds =
@@ -154,6 +161,7 @@ export function UsersView() {
         cmsAccess: role === "SUPERADMIN" ? true : grantCms,
         workspaceMode,
         workspaceIds,
+        password: password.length > 0 ? password : undefined,
       },
       {
         onSuccess: (result) => {
@@ -504,6 +512,20 @@ export function UsersView() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="nama@alfateve.co.id"
+            />
+          </Field>
+          <Field
+            label="Password"
+            htmlFor="user-password"
+            hint="Kredensial dikirim ke email akun setelah disimpan."
+          >
+            <TextInput
+              id="user-password"
+              type="password"
+              autoComplete="new-password"
+              value={customPassword}
+              onChange={(event) => setCustomPassword(event.target.value)}
+              placeholder="Kosongkan untuk membuat otomatis"
             />
           </Field>
           <Field label="Role" htmlFor="user-role">

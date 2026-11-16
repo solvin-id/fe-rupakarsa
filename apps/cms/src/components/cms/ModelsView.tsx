@@ -1,21 +1,27 @@
 "use client";
 
 import { Film, Image as ImageIcon, Pencil, Plus, Settings2, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
+  useAdminModelsFilteredQuery,
   useAdminModelTemplatesQuery,
-  useAdminModelsQuery,
   useAdminProvidersQuery,
   useCreateModelMutation,
   useUpdateModelMutation,
 } from "@rupakarsa/shared/hooks/use-admin";
 import { formatTokens } from "@rupakarsa/shared/lib/format";
-import type { AiModel, MediaType, ModelTemplate } from "@rupakarsa/shared/lib/types";
+import type {
+  AiModel,
+  MediaCapability,
+  MediaType,
+  ModelTemplate,
+} from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 import { Button, Dialog, Field, Select, TextInput } from "@rupakarsa/shared/ui";
 
 const CUSTOM_TEMPLATE = "__custom__";
+const CAPABILITIES: MediaCapability[] = ["TEXT", "IMAGE", "VIDEO"];
 
 function parseNumbers(value: string): number[] {
   return value
@@ -31,18 +37,113 @@ function parseStrings(value: string): string[] {
     .filter(Boolean);
 }
 
+function toggleCapability(
+  list: MediaCapability[],
+  capability: MediaCapability,
+): MediaCapability[] {
+  return list.includes(capability)
+    ? list.filter((item) => item !== capability)
+    : [...list, capability];
+}
+
+function CapabilityChips({ capabilities }: { capabilities: MediaCapability[] }) {
+  if (capabilities.length === 0) {
+    return <span className="text-[10px] text-muted">—</span>;
+  }
+  return (
+    <span className="flex flex-wrap gap-1">
+      {capabilities.map((capability) => (
+        <span
+          key={capability}
+          className="rounded-full bg-canvas-2 px-1.5 py-0.5 text-[9px] font-medium text-ink/70"
+        >
+          {capability}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function CapabilityPicker({
+  label,
+  value,
+  onToggle,
+}: {
+  label: string;
+  value: MediaCapability[];
+  onToggle: (capability: MediaCapability) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="mono-label text-muted">{label}</span>
+      <div className="flex flex-wrap gap-2">
+        {CAPABILITIES.map((capability) => {
+          const checked = value.includes(capability);
+          return (
+            <label
+              key={capability}
+              className={`inline-flex cursor-pointer items-center gap-2 rounded-xl border px-2.5 py-1.5 text-[11px] transition-colors ${
+                checked
+                  ? "border-accent/40 bg-accent-soft text-accent-strong"
+                  : "border-border bg-white text-muted"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(capability)}
+                className="size-3.5 accent-[#d93e14]"
+              />
+              {capability}
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function ModelsView() {
-  const modelsQuery = useAdminModelsQuery();
+  const allModelsQuery = useAdminModelsFilteredQuery({});
   const providersQuery = useAdminProvidersQuery();
   const createModel = useCreateModelMutation();
   const updateModel = useUpdateModelMutation();
+  const updateModelFull = updateModel;
   const pushToast = useUiStore((state) => state.pushToast);
 
+  const [filterProviderId, setFilterProviderId] = useState("");
+  const [filterInput, setFilterInput] = useState("");
+  const [filterOutput, setFilterOutput] = useState("");
+  const [filterQuery, setFilterQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [onlyActive, setOnlyActive] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(filterQuery.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [filterQuery]);
+
+  const filters = useMemo(
+    () => ({
+      ...(filterProviderId ? { providerId: filterProviderId } : {}),
+      ...(filterInput ? { input: filterInput as MediaCapability } : {}),
+      ...(filterOutput ? { output: filterOutput as MediaCapability } : {}),
+      ...(debouncedQuery ? { q: debouncedQuery } : {}),
+      ...(onlyActive ? { active: true } : {}),
+    }),
+    [debouncedQuery, filterInput, filterOutput, filterProviderId, onlyActive],
+  );
+
+  const modelsQuery = useAdminModelsFilteredQuery(filters);
+
   const [editing, setEditing] = useState<AiModel | null>(null);
+  const [draftDisplayName, setDraftDisplayName] = useState("");
   const [draftCost, setDraftCost] = useState("");
   const [draftDurations, setDraftDurations] = useState("");
   const [draftResolutions, setDraftResolutions] = useState("");
   const [draftAspectRatios, setDraftAspectRatios] = useState("");
+  const [draftInputCaps, setDraftInputCaps] = useState<MediaCapability[]>(["TEXT"]);
+  const [draftOutputCaps, setDraftOutputCaps] = useState<MediaCapability[]>(["VIDEO"]);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [draftProviderId, setDraftProviderId] = useState("");
@@ -54,17 +155,20 @@ export function ModelsView() {
   const [draftNewDurations, setDraftNewDurations] = useState("");
   const [draftNewResolutions, setDraftNewResolutions] = useState("");
   const [draftNewAspectRatios, setDraftNewAspectRatios] = useState("");
+  const [draftNewInputCaps, setDraftNewInputCaps] = useState<MediaCapability[]>(["TEXT"]);
+  const [draftNewOutputCaps, setDraftNewOutputCaps] = useState<MediaCapability[]>(["VIDEO"]);
   const [draftActive, setDraftActive] = useState(true);
 
   const models = modelsQuery.data ?? [];
+  const allModels = allModelsQuery.data ?? [];
   const providers = providersQuery.data ?? [];
   const selectedProvider = providers.find((provider) => provider.id === draftProviderId) ?? null;
   const templatesQuery = useAdminModelTemplatesQuery(selectedProvider?.code ?? "");
   const templates = templatesQuery.data ?? [];
 
-  const activeCount = models.filter((model) => model.isActive).length;
-  const videoCount = models.filter((model) => model.mediaType === "VIDEO").length;
-  const imageCount = models.filter((model) => model.mediaType === "IMAGE").length;
+  const activeCount = allModels.filter((model) => model.isActive).length;
+  const videoCount = allModels.filter((model) => model.mediaType === "VIDEO").length;
+  const imageCount = allModels.filter((model) => model.mediaType === "IMAGE").length;
 
   function providerName(providerId: string): string {
     return providers.find((provider) => provider.id === providerId)?.name ?? "—";
@@ -72,14 +176,21 @@ export function ModelsView() {
 
   function openEdit(model: AiModel): void {
     setEditing(model);
+    setDraftDisplayName(model.displayName);
     setDraftCost(String(model.tokenCost));
     setDraftDurations((model.allowedParams.durations ?? []).join(", "));
     setDraftResolutions(model.allowedParams.resolutions.join(", "));
     setDraftAspectRatios(model.allowedParams.aspectRatios.join(", "));
+    setDraftInputCaps([...model.inputCapabilities]);
+    setDraftOutputCaps([...model.outputCapabilities]);
   }
 
   function handleSave(): void {
     if (!editing) return;
+    if (draftDisplayName.trim().length < 2) {
+      pushToast("error", "Nama model minimal 2 karakter.");
+      return;
+    }
     const cost = Number(draftCost);
     if (!Number.isFinite(cost) || cost < 0) {
       pushToast("error", "Tarif token harus angka 0 atau lebih.");
@@ -91,20 +202,27 @@ export function ModelsView() {
       pushToast("error", "Resolusi dan rasio aspek tidak boleh kosong.");
       return;
     }
-    updateModel.mutate(
+    if (draftOutputCaps.length === 0) {
+      pushToast("error", "Kapabilitas output wajib diisi.");
+      return;
+    }
+    updateModelFull.mutate(
       {
         modelId: editing.id,
+        displayName: draftDisplayName.trim(),
         tokenCost: Math.round(cost),
         allowedParams: {
           durations: editing.mediaType === "VIDEO" ? parseNumbers(draftDurations) : undefined,
           resolutions,
           aspectRatios,
         },
+        inputCapabilities: draftInputCaps,
+        outputCapabilities: draftOutputCaps,
       },
       {
         onSuccess: () => {
           setEditing(null);
-          pushToast("success", `Tarif ${editing.displayName} diperbarui.`);
+          pushToast("success", `Model ${draftDisplayName.trim()} diperbarui.`);
         },
         onError: (error) => pushToast("error", error.message),
       },
@@ -121,6 +239,8 @@ export function ModelsView() {
       setDraftNewDurations("");
       setDraftNewResolutions("");
       setDraftNewAspectRatios("");
+      setDraftNewInputCaps(["TEXT"]);
+      setDraftNewOutputCaps(["VIDEO"]);
       return;
     }
     setDraftTemplateCode(template.code);
@@ -131,6 +251,8 @@ export function ModelsView() {
     setDraftNewDurations((template.allowedParams.durations ?? []).join(", "));
     setDraftNewResolutions(template.allowedParams.resolutions.join(", "));
     setDraftNewAspectRatios(template.allowedParams.aspectRatios.join(", "));
+    setDraftNewInputCaps(["TEXT", "IMAGE"]);
+    setDraftNewOutputCaps([template.mediaType]);
   }
 
   function openCreate(): void {
@@ -160,6 +282,11 @@ export function ModelsView() {
     applyTemplate(templates.find((template) => template.code === code) ?? null);
   }
 
+  function handleMediaTypeChange(value: MediaType): void {
+    setDraftMediaType(value);
+    setDraftNewOutputCaps([value]);
+  }
+
   function handleCreate(): void {
     if (!draftProviderId) {
       pushToast("error", "Pilih provider terlebih dahulu.");
@@ -184,6 +311,10 @@ export function ModelsView() {
       pushToast("error", "Resolusi dan rasio aspek tidak boleh kosong.");
       return;
     }
+    if (draftNewOutputCaps.length === 0) {
+      pushToast("error", "Kapabilitas output wajib diisi.");
+      return;
+    }
     const durations = draftMediaType === "VIDEO" ? parseNumbers(draftNewDurations) : undefined;
     if (draftMediaType === "VIDEO" && (!durations || durations.length === 0)) {
       pushToast("error", "Model video membutuhkan minimal satu durasi.");
@@ -196,6 +327,8 @@ export function ModelsView() {
         code: draftCode.trim(),
         displayName: draftName.trim(),
         mediaType: draftMediaType,
+        inputCapabilities: draftNewInputCaps,
+        outputCapabilities: draftNewOutputCaps,
         allowedParams: { durations, resolutions, aspectRatios },
         tokenCost: Math.round(cost),
         isActive: draftActive,
@@ -217,7 +350,7 @@ export function ModelsView() {
     );
   }
 
-  if (modelsQuery.isPending || providersQuery.isPending) {
+  if (modelsQuery.isPending || allModelsQuery.isPending || providersQuery.isPending) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -234,7 +367,8 @@ export function ModelsView() {
             Models &amp; tarif
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-            Aktivasi model dan atur tarif token. Tambah model sesuai katalog provider.
+            Aktivasi model dan atur tarif token. Filter berdasarkan provider dan kapabilitas input
+            atau output.
           </p>
         </div>
         <Button
@@ -271,55 +405,110 @@ export function ModelsView() {
         })}
       </div>
 
+      <div className="mt-4 rounded-[1.75rem] border border-border bg-white p-4">
+        <div className="grid gap-3 lg:grid-cols-4">
+          <Select
+            aria-label="Filter provider"
+            value={filterProviderId}
+            onChange={setFilterProviderId}
+            options={[
+              { value: "", label: "Semua provider" },
+              ...providers.map((provider) => ({
+                value: provider.id,
+                label: provider.name,
+              })),
+            ]}
+          />
+          <Select
+            aria-label="Filter kapabilitas input"
+            value={filterInput}
+            onChange={setFilterInput}
+            options={[
+              { value: "", label: "Semua input" },
+              ...CAPABILITIES.map((capability) => ({
+                value: capability,
+                label: `Input ${capability}`,
+              })),
+            ]}
+          />
+          <Select
+            aria-label="Filter kapabilitas output"
+            value={filterOutput}
+            onChange={setFilterOutput}
+            options={[
+              { value: "", label: "Semua output" },
+              ...CAPABILITIES.map((capability) => ({
+                value: capability,
+                label: `Output ${capability}`,
+              })),
+            ]}
+          />
+          <TextInput
+            value={filterQuery}
+            onChange={(event) => setFilterQuery(event.target.value)}
+            placeholder="Cari nama atau kode model"
+            aria-label="Cari model"
+          />
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <label className="inline-flex cursor-pointer items-center gap-2 text-[11px] text-muted">
+            <input
+              type="checkbox"
+              checked={onlyActive}
+              onChange={(event) => setOnlyActive(event.target.checked)}
+              className="size-4 accent-[#d93e14]"
+            />
+            Hanya aktif
+          </label>
+          <span className="text-[10px] text-muted">{models.length} model</span>
+        </div>
+      </div>
+
       <div className="mt-4 overflow-hidden rounded-[1.75rem] border border-border bg-white">
-        <div className="hidden grid-cols-[1.5fr_0.6fr_0.6fr_1.4fr_0.5fr_auto] gap-3 border-b border-border px-5 py-3 text-[10px] uppercase tracking-[0.14em] text-muted lg:grid">
+        <div className="hidden grid-cols-[1.6fr_1.2fr_0.5fr_0.5fr_0.5fr_auto] gap-3 border-b border-border px-5 py-3 text-[10px] uppercase tracking-[0.14em] text-muted lg:grid">
           <span>Model</span>
-          <span>Tipe</span>
+          <span>Kapabilitas</span>
+          <span>Sumber</span>
           <span>Tarif</span>
-          <span>Parameter</span>
           <span>Status</span>
           <span />
         </div>
 
+        {models.length === 0 ? (
+          <p className="px-5 py-8 text-center text-xs text-muted">
+            Tidak ada model yang cocok dengan filter.
+          </p>
+        ) : null}
+
         {models.map((model) => (
           <div
             key={model.id}
-            className="grid gap-3 border-b border-border/60 px-5 py-4 last:border-b-0 lg:grid-cols-[1.5fr_0.6fr_0.6fr_1.4fr_0.5fr_auto] lg:items-center"
+            className="grid gap-3 border-b border-border/60 px-5 py-4 last:border-b-0 lg:grid-cols-[1.6fr_1.2fr_0.5fr_0.5fr_0.5fr_auto] lg:items-center"
           >
             <div>
               <p className="text-sm font-medium text-ink">{model.displayName}</p>
-              <p className="font-mono text-[10px] text-muted">{model.code}</p>
-              <p className="text-[9px] text-muted/70">{providerName(model.providerId)}</p>
+              <p className="font-mono text-[10px] text-muted">
+                {model.providerModelId || model.code}
+              </p>
+              <p className="text-[9px] text-muted/70">
+                {providerName(model.providerId)} · {model.mediaType}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+              <CapabilityChips capabilities={model.inputCapabilities} />
+              <span aria-hidden>→</span>
+              <CapabilityChips capabilities={model.outputCapabilities} />
             </div>
             <span
-              className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] ${
-                model.mediaType === "VIDEO"
+              className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[9px] font-medium ${
+                model.source === "SYNC"
                   ? "bg-accent-soft text-accent-strong"
-                  : "bg-accent-2-soft text-accent-2"
+                  : "bg-canvas-2 text-ink/70"
               }`}
             >
-              {model.mediaType === "VIDEO" ? (
-                <Film className="size-3" aria-hidden />
-              ) : (
-                <ImageIcon className="size-3" aria-hidden />
-              )}
-              {model.mediaType}
+              {model.source}
             </span>
             <p className="text-sm font-semibold text-ink">{formatTokens(model.tokenCost)}</p>
-            <div className="text-[10px] leading-relaxed text-muted">
-              <p>
-                Durasi:{" "}
-                <span className="text-ink">
-                  {model.allowedParams.durations?.map((item) => `${item}s`).join(", ") ?? "—"}
-                </span>
-              </p>
-              <p>
-                Resolusi: <span className="text-ink">{model.allowedParams.resolutions.join(", ")}</span>
-              </p>
-              <p>
-                Rasio: <span className="text-ink">{model.allowedParams.aspectRatios.join(", ")}</span>
-              </p>
-            </div>
             <button
               type="button"
               onClick={() => handleToggle(model)}
@@ -350,28 +539,38 @@ export function ModelsView() {
       <div className="mt-4 flex items-start gap-2 rounded-2xl border border-border bg-white/60 px-4 py-3 text-[11px] leading-relaxed text-muted">
         <Settings2 className="mt-0.5 size-3.5 shrink-0 text-accent" aria-hidden />
         <p>
-          Tarif token langsung dipakai kalkulator di Creator. Plan Mode gratis 250× per top-up,
-          setelah itu 1 token per plan atau reprompt.
+          Tarif token langsung dipakai kalkulator di Creator. Kapabilitas input menentukan tipe
+          lampiran yang boleh dikirim ke model ini.
         </p>
       </div>
 
       <Dialog
         open={Boolean(editing)}
         title={`Edit ${editing?.displayName ?? "model"}`}
-        description="Atur tarif token dan parameter yang diizinkan untuk model ini."
+        description="Atur nama, tarif token, parameter, dan kapabilitas model."
         onClose={() => setEditing(null)}
         footer={
           <>
             <Button variant="ghost" onClick={() => setEditing(null)}>
               Batal
             </Button>
-            <Button variant="primary" loading={updateModel.isPending} onClick={handleSave}>
+            <Button variant="primary" loading={updateModelFull.isPending} onClick={handleSave}>
               Simpan perubahan
             </Button>
           </>
         }
       >
         <div className="flex flex-col gap-4">
+          <Field label="Nama tampilan" htmlFor="model-display-name">
+            <TextInput
+              id="model-display-name"
+              value={draftDisplayName}
+              onChange={(event) => setDraftDisplayName(event.target.value)}
+            />
+          </Field>
+          <Field label="Kode model" htmlFor="model-code-readonly" hint="Kode model tidak diubah.">
+            <TextInput id="model-code-readonly" value={editing?.code ?? ""} disabled readOnly />
+          </Field>
           <Field label="Tarif token per render" htmlFor="model-cost">
             <TextInput
               id="model-cost"
@@ -416,6 +615,20 @@ export function ModelsView() {
               onChange={(event) => setDraftAspectRatios(event.target.value)}
             />
           </Field>
+          <CapabilityPicker
+            label="Kapabilitas input"
+            value={draftInputCaps}
+            onToggle={(capability) =>
+              setDraftInputCaps((current) => toggleCapability(current, capability))
+            }
+          />
+          <CapabilityPicker
+            label="Kapabilitas output"
+            value={draftOutputCaps}
+            onToggle={(capability) =>
+              setDraftOutputCaps((current) => toggleCapability(current, capability))
+            }
+          />
         </div>
       </Dialog>
 
@@ -499,7 +712,7 @@ export function ModelsView() {
               <Select
                 id="model-media"
                 value={draftMediaType}
-                onChange={(value) => setDraftMediaType(value as MediaType)}
+                onChange={(value) => handleMediaTypeChange(value as MediaType)}
                 options={[
                   { value: "VIDEO", label: "VIDEO" },
                   { value: "IMAGE", label: "IMAGE" },
@@ -554,6 +767,21 @@ export function ModelsView() {
               onChange={(event) => setDraftNewAspectRatios(event.target.value)}
             />
           </Field>
+
+          <CapabilityPicker
+            label="Kapabilitas input"
+            value={draftNewInputCaps}
+            onToggle={(capability) =>
+              setDraftNewInputCaps((current) => toggleCapability(current, capability))
+            }
+          />
+          <CapabilityPicker
+            label="Kapabilitas output"
+            value={draftNewOutputCaps}
+            onToggle={(capability) =>
+              setDraftNewOutputCaps((current) => toggleCapability(current, capability))
+            }
+          />
 
           <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-2/60 px-3 py-3">
             <input

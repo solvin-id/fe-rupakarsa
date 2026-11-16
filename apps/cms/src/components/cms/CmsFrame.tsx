@@ -3,6 +3,7 @@
 import {
   Building2,
   ChevronRight,
+  HardDrive,
   KeyRound,
   LayoutGrid,
   LogOut,
@@ -34,6 +35,7 @@ const NAV = [
   { href: "/users", label: "Users & akses", icon: Users },
   { href: "/providers", label: "Providers", icon: KeyRound },
   { href: "/models", label: "Models & tarif", icon: Settings2 },
+  { href: "/storage", label: "Storage", icon: HardDrive },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

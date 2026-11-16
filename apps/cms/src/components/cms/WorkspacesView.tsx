@@ -5,12 +5,14 @@ import { useState } from "react";
 
 import {
   useAdminAccountsQuery,
+  useAdminOrdersQuery,
   useAdminWorkspacesQuery,
   useCreateAdminWorkspaceMutation,
+  useMarkOrderPaidMutation,
   useTopUpWorkspaceMutation,
   useUpdateAdminWorkspaceMutation,
 } from "@rupakarsa/shared/hooks/use-admin";
-import { formatDate, formatTokens } from "@rupakarsa/shared/lib/format";
+import { formatDate, formatDateTime, formatRupiah, formatTokens } from "@rupakarsa/shared/lib/format";
 import { slugify } from "@rupakarsa/shared/lib/slug";
 import type { Workspace } from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
@@ -19,9 +21,11 @@ import { Button, Dialog, Field, Select, TextInput } from "@rupakarsa/shared/ui";
 export function WorkspacesView() {
   const workspacesQuery = useAdminWorkspacesQuery();
   const accountsQuery = useAdminAccountsQuery();
+  const ordersQuery = useAdminOrdersQuery();
   const createWorkspace = useCreateAdminWorkspaceMutation();
   const updateWorkspace = useUpdateAdminWorkspaceMutation();
   const topUp = useTopUpWorkspaceMutation();
+  const markOrderPaid = useMarkOrderPaidMutation();
   const pushToast = useUiStore((state) => state.pushToast);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -41,6 +45,7 @@ export function WorkspacesView() {
   const workspaces = workspacesQuery.data?.workspaces ?? [];
   const memberships = workspacesQuery.data?.memberships ?? [];
   const accounts = accountsQuery.data ?? [];
+  const orders = ordersQuery.data ?? [];
 
   const activeCount = workspaces.filter((workspace) => workspace.isActive).length;
   const totalTokens = workspaces.reduce((total, workspace) => total + workspace.tokenBalance, 0);
@@ -155,6 +160,14 @@ export function WorkspacesView() {
         onError: (error) => pushToast("error", error.message),
       },
     );
+  }
+
+  function handleMarkPaid(orderId: string): void {
+    markOrderPaid.mutate(orderId, {
+      onSuccess: (workspace) =>
+        pushToast("success", `Order ditandai lunas. Saldo ${workspace.name} diperbarui.`),
+      onError: (error) => pushToast("error", error.message),
+    });
   }
 
   if (workspacesQuery.isPending || accountsQuery.isPending) {
@@ -295,6 +308,85 @@ export function WorkspacesView() {
           Penghapusan workspace dilakukan owner dari Creator.
         </p>
       </div>
+
+      <section className="mt-4 rounded-[1.75rem] border border-border bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-canvas-2 text-ink">
+              <CircleDollarSign className="size-4" aria-hidden />
+            </span>
+            <div>
+              <p className="mono-label text-muted">Top-up manual</p>
+              <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-ink">
+                Order terbaru
+              </h2>
+            </div>
+          </div>
+          <span className="text-[10px] text-muted">
+            Tandai lunas untuk menambah saldo dan kuota plan workspace.
+          </span>
+        </div>
+
+        {ordersQuery.isPending ? (
+          <div className="mt-4 flex items-center justify-center py-6">
+            <span className="size-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+          </div>
+        ) : orders.length === 0 ? (
+          <p className="mt-4 rounded-xl border border-border bg-surface-2/40 px-3 py-4 text-center text-xs text-muted">
+            Belum ada order top-up.
+          </p>
+        ) : (
+          <div className="mt-4 overflow-hidden rounded-2xl border border-border">
+            <div className="hidden grid-cols-[1.4fr_0.6fr_0.6fr_0.9fr_0.7fr_auto] gap-3 border-b border-border bg-surface-2/40 px-4 py-2.5 text-[10px] uppercase tracking-[0.14em] text-muted sm:grid">
+              <span>Workspace</span>
+              <span>Token</span>
+              <span>Plan</span>
+              <span>Nominal</span>
+              <span>Status</span>
+              <span />
+            </div>
+            {orders.map((order) => (
+              <div
+                key={order.id}
+                className="grid gap-1 border-b border-border/60 px-4 py-2.5 text-[11px] last:border-b-0 sm:grid-cols-[1.4fr_0.6fr_0.6fr_0.9fr_0.7fr_auto] sm:items-center sm:gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium text-ink">{order.workspaceName}</p>
+                  <p className="text-[10px] text-muted">{formatDateTime(order.createdAt)}</p>
+                </div>
+                <span className="text-ink">{formatTokens(order.tokens)}</span>
+                <span className="text-muted">{formatTokens(order.planQuota)}×</span>
+                <span className="text-ink">{formatRupiah(order.amountRupiah)}</span>
+                <span
+                  className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[9px] font-medium ${
+                    order.status === "PAID"
+                      ? "bg-success/10 text-success"
+                      : order.status === "PENDING"
+                        ? "bg-warning/10 text-warning"
+                        : "bg-canvas-2 text-muted"
+                  }`}
+                >
+                  {order.status}
+                </span>
+                <div className="justify-self-start sm:justify-self-end">
+                  {order.status === "PENDING" ? (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      loading={markOrderPaid.isPending && markOrderPaid.variables === order.id}
+                      onClick={() => handleMarkPaid(order.id)}
+                    >
+                      Tandai lunas
+                    </Button>
+                  ) : (
+                    <span className="text-[10px] text-muted">—</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
 
       <Dialog
         open={createOpen}

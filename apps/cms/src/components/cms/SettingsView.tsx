@@ -1,14 +1,74 @@
 "use client";
 
-import { CheckCircle2, MessageCircle, Phone, Save, Settings } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  CheckCircle2,
+  History,
+  Mail,
+  MessageCircle,
+  Phone,
+  Save,
+  Settings,
+  Sparkles,
+} from "lucide-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
 
-import { useAdminContactQuery, useUpdateContactMutation } from "@rupakarsa/shared/hooks/use-admin";
-import type { AdminContact } from "@rupakarsa/shared/lib/types";
+import {
+  useAdminAuditLogsQuery,
+  useAdminContactQuery,
+  useAdminMailSettingsQuery,
+  useAdminModelsFilteredQuery,
+  useAdminProvidersQuery,
+  useTestMailMutation,
+  useUpdateContactMutation,
+  useUpdateMailSettingsMutation,
+} from "@rupakarsa/shared/hooks/use-admin";
+import { apiRequest } from "@rupakarsa/shared/lib/api/client";
+import type { AiModel, AdminContact, MailSettings, MediaCapability } from "@rupakarsa/shared/lib/types";
+import { formatDateTime } from "@rupakarsa/shared/lib/format";
 import { normalizeWhatsAppNumber, whatsappLink } from "@rupakarsa/shared/lib/whatsapp";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
-import { Button, Field, TextInput } from "@rupakarsa/shared/ui";
+import { Button, Dialog, Field, Select, TextInput } from "@rupakarsa/shared/ui";
+
+const AI_SETTINGS_KEY = ["admin", "settings", "ai"] as const;
+
+interface AiSettingsPayload {
+  planModelId: string | null;
+  analysisModelId: string | null;
+  videoAnalysisModelId: string | null;
+  defaultVideoModelId: string | null;
+}
+
+function comparePlanModels(a: AiModel, b: AiModel): number {
+  const score = (model: AiModel) =>
+    model.inputCapabilities.filter((capability) =>
+      (["TEXT", "IMAGE", "VIDEO"] as MediaCapability[]).includes(capability),
+    ).length;
+  return score(b) - score(a) || a.displayName.localeCompare(b.displayName);
+}
+
+function capabilityOptions(
+  models: AiModel[],
+  label: (model: AiModel) => string,
+): { value: string; label: string }[] {
+  return [
+    {
+      value: "",
+      label:
+        models.length === 0 ? "Sync provider dulu di menu Providers." : "Belum disetel",
+    },
+    ...models.map((model) => ({ value: model.id, label: label(model) })),
+  ];
+}
+
+function SectionLoading() {
+  return (
+    <div className="flex min-h-24 items-center justify-center">
+      <span className="size-5 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+    </div>
+  );
+}
 
 export function SettingsView() {
   const contactQuery = useAdminContactQuery();
@@ -78,12 +138,15 @@ function SettingsForm({ contact }: { contact: AdminContact }) {
         <span className="mono-label text-accent-strong">Konfigurasi</span>
         <h1 className="display mt-2 text-[clamp(2.2rem,4vw,3.4rem)] text-ink">Settings</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-          Atur kontak admin yang dihubungi calon workspace dari tombol “Butuh akses?” di halaman
-          login Creator.
+          Atur model AI default, email keluar, kontak admin, dan audit aktivitas CMS.
         </p>
       </header>
 
-      <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-accent/20 bg-accent-soft/50 px-4 py-3.5">
+      <div className="mt-5">
+        <AiSettingsSection />
+      </div>
+
+      <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-accent/20 bg-accent-soft/50 px-4 py-3.5">
         <MessageCircle className="mt-0.5 size-4 shrink-0 text-accent-strong" aria-hidden />
         <p className="text-xs leading-relaxed text-ink/70">
           <span className="font-medium text-ink">Nomor WhatsApp admin dipakai untuk request akses.</span>{" "}
@@ -205,6 +268,513 @@ function SettingsForm({ contact }: { contact: AdminContact }) {
           </div>
         </section>
       </div>
+
+      <div className="mt-4">
+        <MailSettingsSection />
+      </div>
+
+      <div className="mt-4">
+        <AuditLogSection />
+      </div>
     </div>
+  );
+}
+
+function AiSettingsSection() {
+  const modelsQuery = useAdminModelsFilteredQuery({});
+  const providersQuery = useAdminProvidersQuery();
+  const aiQuery = useQuery({
+    queryKey: AI_SETTINGS_KEY,
+    queryFn: () => apiRequest<AiSettingsPayload>("/api/cms/settings/ai"),
+  });
+
+  const settings = aiQuery.data;
+  if (aiQuery.isPending || modelsQuery.isPending || providersQuery.isPending) {
+    return (
+      <section className="card p-5 sm:p-6">
+        <SectionLoading />
+      </section>
+    );
+  }
+  if (aiQuery.isError || !settings) {
+    return (
+      <section className="card p-5 sm:p-6">
+        <p className="text-xs text-danger">
+          Gagal memuat pengaturan AI. Muat ulang halaman lalu coba lagi.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <AiSettingsForm
+      settings={settings}
+      models={modelsQuery.data ?? []}
+      providers={providersQuery.data ?? []}
+    />
+  );
+}
+
+function AiSettingsForm({
+  settings,
+  models,
+  providers,
+}: {
+  settings: AiSettingsPayload;
+  models: AiModel[];
+  providers: { id: string; name: string }[];
+}) {
+  const queryClient = useQueryClient();
+  const pushToast = useUiStore((state) => state.pushToast);
+
+  const [planModelId, setPlanModelId] = useState(settings.planModelId ?? "");
+  const [analysisModelId, setAnalysisModelId] = useState(settings.analysisModelId ?? "");
+  const [videoAnalysisModelId, setVideoAnalysisModelId] = useState(
+    settings.videoAnalysisModelId ?? "",
+  );
+  const [defaultVideoModelId, setDefaultVideoModelId] = useState(
+    settings.defaultVideoModelId ?? "",
+  );
+
+  const saveAi = useMutation({
+    mutationFn: (input: AiSettingsPayload) =>
+      apiRequest<AiSettingsPayload>("/api/cms/settings/ai", { method: "PUT", body: input }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(AI_SETTINGS_KEY, data);
+      pushToast("success", "Pengaturan AI disimpan.");
+    },
+    onError: (error) => pushToast("error", error.message),
+  });
+
+  const providerNames = new Map(providers.map((provider) => [provider.id, provider.name]));
+  const planModels = models
+    .filter((model) => model.outputCapabilities.includes("TEXT"))
+    .sort(comparePlanModels);
+  const videoOutputModels = models
+    .filter((model) => model.outputCapabilities.includes("VIDEO"))
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const imageInputModels = models.filter((model) => model.inputCapabilities.includes("IMAGE"));
+  const videoInputModels = models.filter((model) => model.inputCapabilities.includes("VIDEO"));
+
+  const planModel = models.find((model) => model.id === planModelId) ?? null;
+  const missingCapabilities: MediaCapability[] = planModel
+    ? (["IMAGE", "VIDEO"] as MediaCapability[]).filter(
+        (capability) => !planModel.inputCapabilities.includes(capability),
+      )
+    : [];
+
+  return (
+    <section className="card p-5 sm:p-6">
+      <div className="flex items-center gap-2">
+        <span className="flex size-9 items-center justify-center rounded-xl bg-canvas-2 text-ink">
+          <Sparkles className="size-4" aria-hidden />
+        </span>
+        <div>
+          <p className="mono-label text-muted">Pipeline AI</p>
+          <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-ink">
+            Model plan, render, dan analisis
+          </h2>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <div>
+          <Field
+            label="Model plan"
+            htmlFor="ai-plan-model"
+            hint="Menulis plan dan reprompt. Lampiran dikirim langsung ke model ini."
+          >
+            <Select
+              id="ai-plan-model"
+              value={planModelId}
+              onChange={setPlanModelId}
+              options={capabilityOptions(
+                planModels,
+                (model) =>
+                  `${model.displayName} · ${providerNames.get(model.providerId) ?? "—"} · ${model.inputCapabilities.join("+")}`,
+              )}
+            />
+          </Field>
+          {missingCapabilities.length > 0 ? (
+            <div className="mt-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2">
+              <p className="text-[11px] font-medium text-ink">
+                Model plan ini tidak menerima: {missingCapabilities.join(", ")}.
+              </p>
+              <p className="mt-1 text-[10px] leading-relaxed text-muted">
+                Lampiran dengan tipe tersebut otomatis dinonaktifkan di studio Creator.
+              </p>
+            </div>
+          ) : null}
+        </div>
+
+        <Field
+          label="Default model video"
+          htmlFor="ai-default-video-model"
+          hint="Model video yang otomatis dipilih saat tab Video dibuka di Creator."
+        >
+          <Select
+            id="ai-default-video-model"
+            value={defaultVideoModelId}
+            onChange={setDefaultVideoModelId}
+            options={capabilityOptions(
+              videoOutputModels,
+              (model) => `${model.displayName} · ${providerNames.get(model.providerId) ?? "—"}`,
+            )}
+          />
+        </Field>
+
+        <Field
+          label="Analisis gambar"
+          htmlFor="ai-analysis-model"
+          hint="Model vision untuk menganalisis lampiran gambar."
+        >
+          <Select
+            id="ai-analysis-model"
+            value={analysisModelId}
+            onChange={setAnalysisModelId}
+            options={capabilityOptions(
+              imageInputModels,
+              (model) => `${model.displayName} · ${providerNames.get(model.providerId) ?? "—"}`,
+            )}
+          />
+        </Field>
+
+        <Field
+          label="Analisis video"
+          htmlFor="ai-video-analysis-model"
+          hint="Model vision yang menerima input video."
+        >
+          <Select
+            id="ai-video-analysis-model"
+            value={videoAnalysisModelId}
+            onChange={setVideoAnalysisModelId}
+            options={capabilityOptions(
+              videoInputModels,
+              (model) => `${model.displayName} · ${providerNames.get(model.providerId) ?? "—"}`,
+            )}
+          />
+        </Field>
+      </div>
+
+      <Button
+        variant="primary"
+        className="mt-5"
+        loading={saveAi.isPending}
+        icon={<Save className="size-4" aria-hidden />}
+        onClick={() =>
+          saveAi.mutate({
+            planModelId: planModelId || null,
+            analysisModelId: analysisModelId || null,
+            videoAnalysisModelId: videoAnalysisModelId || null,
+            defaultVideoModelId: defaultVideoModelId || null,
+          })
+        }
+      >
+        Simpan AI
+      </Button>
+    </section>
+  );
+}
+
+function MailSettingsSection() {
+  const mailQuery = useAdminMailSettingsQuery();
+  const settings = mailQuery.data;
+
+  if (mailQuery.isPending) {
+    return (
+      <section className="card p-5 sm:p-6">
+        <SectionLoading />
+      </section>
+    );
+  }
+  if (mailQuery.isError || !settings) {
+    return (
+      <section className="card p-5 sm:p-6">
+        <p className="text-xs text-danger">
+          Gagal memuat pengaturan email. Muat ulang halaman lalu coba lagi.
+        </p>
+      </section>
+    );
+  }
+
+  return <MailSettingsForm settings={settings} />;
+}
+
+function MailSettingsForm({ settings }: { settings: MailSettings }) {
+  const updateMail = useUpdateMailSettingsMutation();
+  const testMail = useTestMailMutation();
+  const pushToast = useUiStore((state) => state.pushToast);
+
+  const [driver, setDriver] = useState<"smtp" | "log">(settings.driver);
+  const [fromName, setFromName] = useState(settings.fromName);
+  const [fromEmail, setFromEmail] = useState(settings.fromEmail);
+  const [host, setHost] = useState(settings.smtp.host);
+  const [port, setPort] = useState(String(settings.smtp.port));
+  const [secure, setSecure] = useState(settings.smtp.secure);
+  const [user, setUser] = useState(settings.smtp.user);
+  const [password, setPassword] = useState("");
+
+  const [testOpen, setTestOpen] = useState(false);
+  const [testTo, setTestTo] = useState("");
+
+  function handleSave(): void {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fromEmail.trim())) {
+      pushToast("error", "Format email pengirim tidak valid.");
+      return;
+    }
+    const portNumber = Number(port);
+    if (!Number.isInteger(portNumber) || portNumber < 1 || portNumber > 65535) {
+      pushToast("error", "Port SMTP harus angka 1–65535.");
+      return;
+    }
+    if (driver === "smtp" && host.trim().length === 0) {
+      pushToast("error", "Host SMTP wajib diisi untuk driver smtp.");
+      return;
+    }
+
+    updateMail.mutate(
+      {
+        driver,
+        fromName: fromName.trim(),
+        fromEmail: fromEmail.trim(),
+        smtp: {
+          host: host.trim(),
+          port: portNumber,
+          secure,
+          user: user.trim(),
+          password: password.trim() || undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          setPassword("");
+          pushToast("success", "Pengaturan email disimpan.");
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
+  }
+
+  function handleTest(): void {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(testTo.trim())) {
+      pushToast("error", "Format email tujuan tidak valid.");
+      return;
+    }
+    testMail.mutate(testTo.trim(), {
+      onSuccess: (result) => {
+        pushToast(result.ok ? "success" : "error", result.message);
+        if (result.ok) setTestOpen(false);
+      },
+      onError: (error) => pushToast("error", error.message),
+    });
+  }
+
+  return (
+    <section className="card p-5 sm:p-6">
+      <div className="flex items-center gap-2">
+        <span className="flex size-9 items-center justify-center rounded-xl bg-canvas-2 text-ink">
+          <Mail className="size-4" aria-hidden />
+        </span>
+        <div>
+          <p className="mono-label text-muted">Notifikasi</p>
+          <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-ink">Email</h2>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <Field
+          label="Driver"
+          htmlFor="mail-driver"
+          hint={
+            driver === "log"
+              ? "Driver log menulis email ke outbox server tanpa mengirim ke SMTP."
+              : "Email dikirim lewat SMTP."
+          }
+        >
+          <Select
+            id="mail-driver"
+            value={driver}
+            onChange={(value) => setDriver(value === "smtp" ? "smtp" : "log")}
+            options={[
+              { value: "log", label: "Log (outbox)" },
+              { value: "smtp", label: "SMTP" },
+            ]}
+          />
+        </Field>
+        <Field label="Nama pengirim" htmlFor="mail-from-name">
+          <TextInput
+            id="mail-from-name"
+            value={fromName}
+            onChange={(event) => setFromName(event.target.value)}
+            placeholder="Rupakarsa"
+          />
+        </Field>
+        <Field label="Email pengirim" htmlFor="mail-from-email">
+          <TextInput
+            id="mail-from-email"
+            type="email"
+            value={fromEmail}
+            onChange={(event) => setFromEmail(event.target.value)}
+            placeholder="no-reply@rupakarsa.id"
+          />
+        </Field>
+        <Field label="Host SMTP" htmlFor="mail-host">
+          <TextInput
+            id="mail-host"
+            value={host}
+            onChange={(event) => setHost(event.target.value)}
+            placeholder="smtp.domain.com"
+          />
+        </Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Port" htmlFor="mail-port">
+            <TextInput
+              id="mail-port"
+              type="number"
+              min={1}
+              max={65535}
+              value={port}
+              onChange={(event) => setPort(event.target.value)}
+            />
+          </Field>
+          <label className="mt-6 flex items-start gap-3 rounded-xl border border-border bg-surface-2/60 px-3 py-3">
+            <input
+              type="checkbox"
+              checked={secure}
+              onChange={(event) => setSecure(event.target.checked)}
+              className="mt-0.5 size-4 accent-[#d93e14]"
+            />
+            <span>
+              <span className="block text-xs font-medium text-ink">Secure (TLS)</span>
+              <span className="mt-0.5 block text-[10px] leading-relaxed text-muted">
+                Aktifkan untuk port 465.
+              </span>
+            </span>
+          </label>
+        </div>
+        <Field label="User SMTP" htmlFor="mail-user">
+          <TextInput
+            id="mail-user"
+            value={user}
+            onChange={(event) => setUser(event.target.value)}
+            placeholder="user@domain.com"
+          />
+        </Field>
+        <Field label="Password SMTP" htmlFor="mail-password">
+          <TextInput
+            id="mail-password"
+            type="password"
+            autoComplete="off"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            placeholder="Kosongkan untuk mempertahankan"
+          />
+        </Field>
+      </div>
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Button
+          variant="primary"
+          loading={updateMail.isPending}
+          icon={<Save className="size-4" aria-hidden />}
+          onClick={handleSave}
+        >
+          Simpan email
+        </Button>
+        <Button
+          variant="secondary"
+          icon={<Mail className="size-4" aria-hidden />}
+          onClick={() => setTestOpen(true)}
+        >
+          Kirim email uji
+        </Button>
+      </div>
+
+      <Dialog
+        open={testOpen}
+        title="Kirim email uji"
+        description="Email uji dikirim memakai konfigurasi yang sudah tersimpan."
+        onClose={() => setTestOpen(false)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setTestOpen(false)}>
+              Batal
+            </Button>
+            <Button variant="primary" loading={testMail.isPending} onClick={handleTest}>
+              Kirim
+            </Button>
+          </>
+        }
+      >
+        <Field label="Email tujuan" htmlFor="mail-test-to">
+          <TextInput
+            id="mail-test-to"
+            type="email"
+            value={testTo}
+            onChange={(event) => setTestTo(event.target.value)}
+            placeholder="halo@rupakarsa.id"
+            autoFocus
+          />
+        </Field>
+      </Dialog>
+    </section>
+  );
+}
+
+function AuditLogSection() {
+  const logsQuery = useAdminAuditLogsQuery();
+
+  if (logsQuery.isPending) {
+    return (
+      <section className="card p-5 sm:p-6">
+        <SectionLoading />
+      </section>
+    );
+  }
+  if (logsQuery.isError) {
+    return (
+      <section className="card p-5 sm:p-6">
+        <p className="text-xs text-danger">
+          Gagal memuat audit log. Muat ulang halaman lalu coba lagi.
+        </p>
+      </section>
+    );
+  }
+
+  const logs = logsQuery.data ?? [];
+
+  return (
+    <section className="card p-5 sm:p-6">
+      <div className="flex items-center gap-2">
+        <span className="flex size-9 items-center justify-center rounded-xl bg-canvas-2 text-ink">
+          <History className="size-4" aria-hidden />
+        </span>
+        <div>
+          <p className="mono-label text-muted">Jejak aktivitas</p>
+          <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-ink">Audit log</h2>
+        </div>
+      </div>
+
+      <div className="mt-5 overflow-hidden rounded-2xl border border-border">
+        <div className="hidden grid-cols-[1.4fr_1fr_0.8fr] gap-3 border-b border-border bg-surface-2/40 px-4 py-2.5 text-[10px] uppercase tracking-[0.14em] text-muted sm:grid">
+          <span>Aksi</span>
+          <span>Target</span>
+          <span>Waktu</span>
+        </div>
+        {logs.length === 0 ? (
+          <p className="px-4 py-6 text-center text-xs text-muted">Belum ada aktivitas tercatat.</p>
+        ) : null}
+        {logs.map((log) => (
+          <div
+            key={log.id}
+            className="grid gap-1 border-b border-border/60 px-4 py-2.5 text-[11px] last:border-b-0 sm:grid-cols-[1.4fr_1fr_0.8fr] sm:items-center sm:gap-3"
+          >
+            <span className="font-mono text-ink">{log.action}</span>
+            <span className="text-muted">{log.targetType}</span>
+            <span className="text-muted">{formatDateTime(log.createdAt)}</span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
