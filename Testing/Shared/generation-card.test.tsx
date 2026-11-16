@@ -14,12 +14,19 @@ const baseGeneration: Generation = {
   mediaType: "VIDEO",
   rawPrompt: "Uap rendang",
   plannedPrompt: "[SUBJECT] Uap rendang",
+  planMode: true,
+  finalPrompt: "[SUBJECT] Uap rendang",
+  analysisSnapshot: "",
+  preContextSnapshot: "",
   referenceImageUrl: null,
   selectedParams: { durationSec: 10, resolution: "1080p", aspectRatio: "16:9" },
   tokensCharged: 35,
   status: "COMPLETED",
   externalJobId: "stub_1234abcd",
   outputUrl: "https://api.test/media/generations/a.svg",
+  outputMime: "image/svg+xml",
+  outputSize: 128,
+  outputPurgedAt: null,
   errorMessage: null,
   refunded: false,
   createdAt: "2026-11-16T05:30:00.000Z",
@@ -52,5 +59,12 @@ describe("GenerationCard", () => {
   it("falls back to gradient art when there is no output URL", () => {
     renderCard({ outputUrl: null });
     expect(screen.queryByAltText("Wan Qwen 10s")).toBeNull();
+  });
+
+  it("hides the poster and disables download after retention purged the asset", () => {
+    renderCard({ outputPurgedAt: "2026-11-26T00:00:00.000Z" });
+    expect(screen.queryByAltText("Wan Qwen 10s")).toBeNull();
+    expect(screen.getByText("Aset dibersihkan")).toBeInTheDocument();
+    expect(screen.getByLabelText("Unduh hasil")).toBeDisabled();
   });
 });
