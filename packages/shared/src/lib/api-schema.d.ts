@@ -1560,6 +1560,13 @@ export interface paths {
                         role: "USER" | "SUPERADMIN";
                         /** @default false */
                         cmsAccess?: boolean;
+                        /**
+                         * @default PERSONAL
+                         * @enum {string}
+                         */
+                        workspaceMode?: "PERSONAL" | "EXISTING";
+                        /** @default [] */
+                        workspaceIds?: string[];
                     };
                 };
             };
@@ -1626,6 +1633,8 @@ export interface paths {
                     "application/json": {
                         isActive?: boolean;
                         cmsAccess?: boolean;
+                        /** Format: uuid */
+                        defaultWorkspaceId?: string;
                     };
                 };
             };
@@ -1668,6 +1677,139 @@ export interface paths {
                 };
             };
         };
+        trace?: never;
+    };
+    "/api/cms/accounts/{id}/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        workspaceIds: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Every membership of the account */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["WorkspaceMembership"][];
+                    };
+                };
+                /** @description Inactive workspace */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No CMS access */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Account or workspace not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/accounts/{id}/workspaces/{workspaceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    workspaceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Membership removed */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No CMS access */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Account is not a member */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Account would be stranded */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/cms/workspaces": {

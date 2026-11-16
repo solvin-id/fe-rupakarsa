@@ -50,11 +50,15 @@ export interface CreateGenerationInput {
   simulateFailure: boolean;
 }
 
+export type AccountWorkspaceMode = "PERSONAL" | "EXISTING";
+
 export interface CreateAccountInput {
   fullName: string;
   email: string;
   role: Role;
   cmsAccess: boolean;
+  workspaceMode: AccountWorkspaceMode;
+  workspaceIds: string[];
 }
 
 export interface CreateAdminWorkspaceInput {
@@ -162,8 +166,19 @@ export const cmsApi = {
       method: "POST",
       body: input,
     }),
-  updateAccount: (accountId: string, input: { isActive?: boolean; cmsAccess?: boolean }) =>
-    apiRequest<User>(`/api/cms/accounts/${accountId}`, { method: "PATCH", body: input }),
+  updateAccount: (
+    accountId: string,
+    input: { isActive?: boolean; cmsAccess?: boolean; defaultWorkspaceId?: string },
+  ) => apiRequest<User>(`/api/cms/accounts/${accountId}`, { method: "PATCH", body: input }),
+  addAccountWorkspaces: (accountId: string, workspaceIds: string[]) =>
+    apiRequest<WorkspaceMembership[]>(`/api/cms/accounts/${accountId}/workspaces`, {
+      method: "POST",
+      body: { workspaceIds },
+    }),
+  removeAccountWorkspace: (accountId: string, workspaceId: string) =>
+    apiRequest<void>(`/api/cms/accounts/${accountId}/workspaces/${workspaceId}`, {
+      method: "DELETE",
+    }),
 
   workspaces: () => apiRequest<AdminWorkspacesPayload>("/api/cms/workspaces"),
   createWorkspace: (input: CreateAdminWorkspaceInput) =>

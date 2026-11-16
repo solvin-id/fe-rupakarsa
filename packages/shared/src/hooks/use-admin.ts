@@ -55,10 +55,44 @@ export function useCreateAccountMutation() {
 export function useUpdateAccountMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { accountId: string; isActive?: boolean; cmsAccess?: boolean }) =>
-      cmsApi.updateAccount(input.accountId, { isActive: input.isActive, cmsAccess: input.cmsAccess }),
+    mutationFn: (input: {
+      accountId: string;
+      isActive?: boolean;
+      cmsAccess?: boolean;
+      defaultWorkspaceId?: string;
+    }) =>
+      cmsApi.updateAccount(input.accountId, {
+        isActive: input.isActive,
+        cmsAccess: input.cmsAccess,
+        defaultWorkspaceId: input.defaultWorkspaceId,
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.admin.accounts });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.workspaces });
+    },
+  });
+}
+
+export function useAddAccountWorkspacesMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { accountId: string; workspaceIds: string[] }) =>
+      cmsApi.addAccountWorkspaces(input.accountId, input.workspaceIds),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.accounts });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.workspaces });
+    },
+  });
+}
+
+export function useRemoveAccountWorkspaceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { accountId: string; workspaceId: string }) =>
+      cmsApi.removeAccountWorkspace(input.accountId, input.workspaceId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.accounts });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.workspaces });
     },
   });
 }

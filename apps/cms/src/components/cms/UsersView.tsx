@@ -5,11 +5,14 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import {
+  useAddAccountWorkspacesMutation,
   useAdminAccountsQuery,
   useAdminWorkspacesQuery,
   useCreateAccountMutation,
+  useRemoveAccountWorkspaceMutation,
   useUpdateAccountMutation,
 } from "@rupakarsa/shared/hooks/use-admin";
+import type { AccountWorkspaceMode } from "@rupakarsa/shared/lib/api/endpoints";
 import { formatDate, formatTokens, formatWorkspaceRole } from "@rupakarsa/shared/lib/format";
 import type { Role, User } from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
@@ -26,18 +29,25 @@ export function UsersView() {
   const workspacesQuery = useAdminWorkspacesQuery();
   const createAccount = useCreateAccountMutation();
   const updateAccount = useUpdateAccountMutation();
+  const addAccountWorkspaces = useAddAccountWorkspacesMutation();
+  const removeAccountWorkspace = useRemoveAccountWorkspaceMutation();
   const pushToast = useUiStore((state) => state.pushToast);
 
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [accessTarget, setAccessTarget] = useState<User | null>(null);
   const [createdAccount, setCreatedAccount] = useState<CreatedAccount | null>(null);
+  const [membershipTarget, setMembershipTarget] = useState<User | null>(null);
+  const [pendingWorkspaceId, setPendingWorkspaceId] = useState("");
   const [copied, setCopied] = useState(false);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("USER");
   const [grantCms, setGrantCms] = useState(false);
+  const [workspaceMode, setWorkspaceMode] = useState<AccountWorkspaceMode>("PERSONAL");
+  const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<string[]>([]);
+  const [defaultWorkspaceId, setDefaultWorkspaceId] = useState("");
 
   const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
   const workspaces = useMemo(() => workspacesQuery.data?.workspaces ?? [], [workspacesQuery.data]);
@@ -71,6 +81,19 @@ export function UsersView() {
     (account) => account.role === "SUPERADMIN" || account.cmsAccess,
   ).length;
   const activeCount = accounts.filter((account) => account.isActive).length;
+  const activeWorkspaces = workspaces.filter((workspace) => workspace.isActive);
+  const membershipTargetAccount = membershipTarget
+    ? (accounts.find((account) => account.id === membershipTarget.id) ?? membershipTarget)
+    : null;
+  const membershipTargetRows = membershipTargetAccount
+    ? membershipsFor(membershipTargetAccount.id)
+    : [];
+  const membershipTargetIds = new Set(
+    membershipTargetRows.map((entry) => entry.membership.workspaceId),
+  );
+  const joinableWorkspaces = activeWorkspaces.filter(
+    (workspace) => !membershipTargetIds.has(workspace.id),
+  );
 
   function membershipsFor(userId: string) {
     return memberships
@@ -87,7 +110,24 @@ export function UsersView() {
     setEmail("");
     setRole("USER");
     setGrantCms(false);
+    setWorkspaceMode("PERSONAL");
+    setSelectedWorkspaceIds([]);
+    setDefaultWorkspaceId("");
     setCreateOpen(true);
+  }
+
+  function changeWorkspaceMode(mode: AccountWorkspaceMode): void {
+    setWorkspaceMode(mode);
+    setSelectedWorkspaceIds([]);
+    setDefaultWorkspaceId("");
+  }
+
+  function toggleWorkspaceSelection(workspaceId: string): void {
+    const next = selectedWorkspaceIds.includes(workspaceId)
+      ? selectedWorkspaceIds.filter((id) => id !== workspaceId)
+      : [...selectedWorkspaceIds, workspaceId];
+    setSelectedWorkspaceIds(next);
+    if (!next.includes(defaultWorkspaceId)) setDefaultWorkspaceId(next[0] ?? "");
   }
 
   function handleCreate(): void {
@@ -95,12 +135,25 @@ export function UsersView() {
       pushToast("error", "Nama akun minimal 2 karakter.");
       return;
     }
+    if (workspaceMode === "EXISTING" && selectedWorkspaceIds.length === 0) {
+      pushToast("error", "Pilih minimal satu workspace.");
+      return;
+    }
+
+    const primaryWorkspaceId = defaultWorkspaceId || selectedWorkspaceIds[0] || "";
+    const workspaceIds =
+      workspaceMode === "EXISTING" && primaryWorkspaceId
+        ? [primaryWorkspaceId, ...selectedWorkspaceIds.filter((id) => id !== primaryWorkspaceId)]
+        : [];
+
     createAccount.mutate(
       {
         fullName: fullName.trim(),
         email: email.trim(),
         role,
         cmsAccess: role === "SUPERADMIN" ? true : grantCms,
+        workspaceMode,
+        workspaceIds,
       },
       {
         onSuccess: (result) => {
@@ -110,7 +163,43 @@ export function UsersView() {
             email: result.account.email,
             temporaryPassword: result.temporaryPassword,
           });
-          pushToast("success", "Akun dan workspace personal dibuat.");
+          pushToast(
+            "success",
+            workspaceMode === "EXISTING"
+              ? `Akun dibuat di ${workspaceIds.length} workspace.`
+              : "Akun dan workspace personal dibuat.",
+          );
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
+  }
+
+  function setDefaultWorkspace(accountId: string, workspaceId: string): void {
+    updateAccount.mutate(
+      { accountId, defaultWorkspaceId: workspaceId },
+      { onError: (error) => pushToast("error", error.message) },
+    );
+  }
+
+  function detachWorkspace(accountId: string, workspaceId: string): void {
+    removeAccountWorkspace.mutate(
+      { accountId, workspaceId },
+      {
+        onSuccess: () => pushToast("success", "Akun dilepas dari workspace."),
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
+  }
+
+  function attachWorkspace(): void {
+    if (!membershipTargetAccount || pendingWorkspaceId === "") return;
+    addAccountWorkspaces.mutate(
+      { accountId: membershipTargetAccount.id, workspaceIds: [pendingWorkspaceId] },
+      {
+        onSuccess: () => {
+          setPendingWorkspaceId("");
+          pushToast("success", "Akun ditambahkan ke workspace.");
         },
         onError: (error) => pushToast("error", error.message),
       },
@@ -191,8 +280,8 @@ export function UsersView() {
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-strong" aria-hidden />
         <p className="text-xs leading-relaxed text-ink/70">
           <span className="font-medium text-ink">Akses CMS adalah izin tambahan.</span> User tetap
-          ber-role USER dan memakai saldo workspace-nya. Setiap akun baru otomatis mendapat satu
-          workspace personal. Top-up dilakukan di menu Workspaces.
+          ber-role USER dan memakai saldo workspace-nya. Akun baru mendapat workspace personal atau
+          di-assign ke workspace yang sudah ada. Top-up dilakukan di menu Workspaces.
         </p>
       </div>
 
@@ -241,7 +330,7 @@ export function UsersView() {
       </div>
 
       <div className="mt-4 overflow-hidden rounded-[1.75rem] border border-border bg-white">
-        <div className="hidden grid-cols-[minmax(0,1.4fr)_0.5fr_minmax(0,1fr)_0.8fr_0.7fr_0.45fr_7rem] items-center gap-4 border-b border-border bg-surface-2/40 px-6 py-3 text-[10px] uppercase tracking-[0.14em] text-muted xl:grid">
+        <div className="hidden grid-cols-[minmax(0,1.4fr)_0.5fr_minmax(0,1fr)_0.8fr_0.7fr_0.45fr_9rem] items-center gap-4 border-b border-border bg-surface-2/40 px-6 py-3 text-[10px] uppercase tracking-[0.14em] text-muted xl:grid">
           <span>User</span>
           <span>Role</span>
           <span>Workspace</span>
@@ -261,7 +350,7 @@ export function UsersView() {
           return (
             <div
               key={account.id}
-              className="grid gap-3 border-b border-border/60 px-6 py-4 last:border-b-0 xl:grid-cols-[minmax(0,1.4fr)_0.5fr_minmax(0,1fr)_0.8fr_0.7fr_0.45fr_7rem] xl:items-center xl:gap-4"
+              className="grid gap-3 border-b border-border/60 px-6 py-4 last:border-b-0 xl:grid-cols-[minmax(0,1.4fr)_0.5fr_minmax(0,1fr)_0.8fr_0.7fr_0.45fr_9rem] xl:items-center xl:gap-4"
             >
               <div className="flex items-center gap-2.5">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-semibold text-canvas">
@@ -354,13 +443,25 @@ export function UsersView() {
                 />
               </button>
 
-              <Link
-                href="/workspaces"
-                className="inline-flex items-center gap-1 justify-self-end text-[11px] font-medium text-ink transition-colors hover:text-accent-strong"
-              >
-                Kelola workspace
-                <ArrowRight className="size-3.5" aria-hidden />
-              </Link>
+              <div className="flex flex-wrap items-center justify-end gap-2 justify-self-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setMembershipTarget(account);
+                    setPendingWorkspaceId("");
+                  }}
+                >
+                  Atur workspace
+                </Button>
+                <Link
+                  href="/workspaces"
+                  className="inline-flex items-center gap-1 text-[11px] font-medium text-ink transition-colors hover:text-accent-strong"
+                >
+                  Kelola workspace
+                  <ArrowRight className="size-3.5" aria-hidden />
+                </Link>
+              </div>
             </div>
           );
         })}
@@ -369,7 +470,11 @@ export function UsersView() {
       <Dialog
         open={createOpen}
         title="Daftarkan user baru"
-        description="Akun baru otomatis mendapat satu workspace personal dengan saldo 0."
+        description={
+          workspaceMode === "EXISTING"
+            ? "Akun langsung menjadi anggota workspace yang dipilih. Tidak ada workspace personal yang dibuat."
+            : "Akun baru otomatis mendapat satu workspace personal dengan saldo 0."
+        }
         onClose={() => setCreateOpen(false)}
         footer={
           <>
@@ -412,13 +517,79 @@ export function UsersView() {
               ]}
             />
           </Field>
-          <p className="rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-[11px] leading-relaxed text-muted">
-            Workspace personal dibuat otomatis. Saldo dan Plan Mode diatur di menu{" "}
-            <Link href="/workspaces" className="font-medium text-ink hover:text-accent-strong">
-              Workspaces
-            </Link>
-            .
-          </p>
+          <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-2/60 px-3 py-3">
+            <input
+              type="checkbox"
+              checked={workspaceMode === "EXISTING"}
+              onChange={(event) => changeWorkspaceMode(event.target.checked ? "EXISTING" : "PERSONAL")}
+              className="mt-0.5 size-4 accent-[#d93e14]"
+            />
+            <span>
+              <span className="block text-xs font-medium text-ink">Assign ke workspace existing</span>
+              <span className="mt-0.5 block text-[10px] leading-relaxed text-muted">
+                Akun menjadi anggota workspace yang dipilih dengan role MEMBER. Role di dalam
+                workspace diatur owner lewat Creator.
+              </span>
+            </span>
+          </label>
+
+          {workspaceMode === "EXISTING" ? (
+            <>
+              <div className="flex flex-col gap-2">
+                <span className="mono-label text-muted">Workspace</span>
+                {activeWorkspaces.length === 0 ? (
+                  <p className="text-[11px] text-muted">
+                    Belum ada workspace aktif. Buat workspace dulu di menu Workspaces.
+                  </p>
+                ) : (
+                  <div className="flex max-h-52 flex-col gap-2 overflow-y-auto rounded-xl border border-border p-2">
+                    {activeWorkspaces.map((workspace) => (
+                      <label
+                        key={workspace.id}
+                        className="flex items-start gap-3 rounded-lg px-2 py-1.5 hover:bg-surface-2/60"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedWorkspaceIds.includes(workspace.id)}
+                          onChange={() => toggleWorkspaceSelection(workspace.id)}
+                          className="mt-0.5 size-4 accent-[#d93e14]"
+                        />
+                        <span className="min-w-0">
+                          <span className="block truncate text-xs font-medium text-ink">
+                            {workspace.name}
+                          </span>
+                          <span className="block truncate text-[10px] text-muted">
+                            {workspace.slug} · {formatTokens(workspace.tokenBalance)} token
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {selectedWorkspaceIds.length >= 2 ? (
+                <Field label="Workspace default" htmlFor="user-default-workspace">
+                  <Select
+                    id="user-default-workspace"
+                    value={defaultWorkspaceId}
+                    onChange={setDefaultWorkspaceId}
+                    options={selectedWorkspaceIds.flatMap((id) => {
+                      const workspace = workspaces.find((item) => item.id === id);
+                      return workspace ? [{ value: workspace.id, label: workspace.name }] : [];
+                    })}
+                  />
+                </Field>
+              ) : null}
+            </>
+          ) : (
+            <p className="rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-[11px] leading-relaxed text-muted">
+              Workspace personal dibuat otomatis. Saldo dan Plan Mode diatur di menu{" "}
+              <Link href="/workspaces" className="font-medium text-ink hover:text-accent-strong">
+                Workspaces
+              </Link>
+              .
+            </p>
+          )}
           <label className="flex items-start gap-3 rounded-xl border border-border bg-surface-2/60 px-3 py-3">
             <input
               type="checkbox"
@@ -519,6 +690,103 @@ export function UsersView() {
             Minta user masuk ke Creator lalu mengganti password lewat tombol Ubah password di
             sidebar.
           </p>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(membershipTargetAccount)}
+        title={`Atur workspace ${membershipTargetAccount?.fullName ?? ""}`}
+        description="Tambahkan atau lepaskan akun ini dari workspace. Setiap akun wajib punya minimal satu workspace."
+        onClose={() => setMembershipTarget(null)}
+        footer={
+          <Button variant="primary" onClick={() => setMembershipTarget(null)}>
+            Selesai
+          </Button>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            {membershipTargetRows.length === 0 ? (
+              <p className="text-[11px] text-muted">
+                Akun ini belum menjadi anggota workspace mana pun.
+              </p>
+            ) : (
+              membershipTargetRows.map(({ membership, workspace }) => {
+                const isDefault =
+                  membershipTargetAccount?.defaultWorkspaceId === membership.workspaceId;
+                return (
+                  <div
+                    key={membership.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <p className="flex items-center gap-1.5 truncate text-xs font-medium text-ink">
+                        {workspace?.name}
+                        {isDefault ? (
+                          <span className="rounded-full bg-canvas-2 px-1 text-[8px] text-ink">
+                            default
+                          </span>
+                        ) : null}
+                      </p>
+                      <p className="text-[10px] text-muted">
+                        {formatWorkspaceRole(membership.role)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={isDefault}
+                        onClick={() => setDefaultWorkspace(membership.userId, membership.workspaceId)}
+                      >
+                        Jadikan default
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={membershipTargetRows.length <= 1}
+                        onClick={() => detachWorkspace(membership.userId, membership.workspaceId)}
+                      >
+                        Lepas
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface-2/60 px-3 py-3">
+            <p className="text-xs font-medium text-ink">Tambah ke workspace</p>
+            {joinableWorkspaces.length === 0 ? (
+              <p className="mt-1 text-[10px] leading-relaxed text-muted">
+                Akun ini sudah menjadi anggota semua workspace aktif.
+              </p>
+            ) : (
+              <div className="mt-2 flex items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <Select
+                    value={pendingWorkspaceId}
+                    onChange={setPendingWorkspaceId}
+                    placeholder="Pilih workspace"
+                    options={joinableWorkspaces.map((workspace) => ({
+                      value: workspace.id,
+                      label: workspace.name,
+                    }))}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  disabled={pendingWorkspaceId === ""}
+                  loading={addAccountWorkspaces.isPending}
+                  onClick={attachWorkspace}
+                >
+                  Tambahkan
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
       </Dialog>
     </div>

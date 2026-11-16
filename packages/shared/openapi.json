@@ -2449,6 +2449,22 @@
                   "cmsAccess": {
                     "type": "boolean",
                     "default": false
+                  },
+                  "workspaceMode": {
+                    "type": "string",
+                    "enum": [
+                      "PERSONAL",
+                      "EXISTING"
+                    ],
+                    "default": "PERSONAL"
+                  },
+                  "workspaceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "default": []
                   }
                 },
                 "required": [
@@ -2521,6 +2537,10 @@
                   },
                   "cmsAccess": {
                     "type": "boolean"
+                  },
+                  "defaultWorkspaceId": {
+                    "type": "string",
+                    "format": "uuid"
                   }
                 }
               }
@@ -2560,6 +2580,153 @@
           },
           "409": {
             "description": "Last superadmin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/accounts/{id}/workspaces": {
+      "post": {
+        "tags": [
+          "CMS accounts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "workspaceIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "minItems": 1
+                  }
+                },
+                "required": [
+                  "workspaceIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Every membership of the account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/WorkspaceMembership"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Inactive workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No CMS access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Account or workspace not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/accounts/{id}/workspaces/{workspaceId}": {
+      "delete": {
+        "tags": [
+          "CMS accounts"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "workspaceId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Membership removed"
+          },
+          "403": {
+            "description": "No CMS access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Account is not a member",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Account would be stranded",
             "content": {
               "application/json": {
                 "schema": {
