@@ -2,7 +2,8 @@
 
 import { CircleDollarSign, Film, Image as ImageIcon, Info, Sparkles } from "lucide-react";
 
-import { AssetDropzone, type ReferenceFile } from "@/components/workspace/AssetDropzone";
+import { AttachmentTray } from "@/components/workspace/AttachmentTray";
+import type { ReferenceFile } from "@/components/workspace/AssetDropzone";
 import { formatRupiahFromTokens, formatTokens } from "@rupakarsa/shared/lib/format";
 import { tokenCapacity } from "@rupakarsa/shared/lib/tokens";
 import type { AiModel, MediaType } from "@rupakarsa/shared/lib/types";
@@ -20,8 +21,10 @@ export interface GeneratorPanelProps {
   onResolutionChange: (value: string) => void;
   aspectRatio: string;
   onAspectRatioChange: (value: string) => void;
-  referenceFile: ReferenceFile | null;
-  onReferenceChange: (file: ReferenceFile | null) => void;
+  attachments: ReferenceFile[];
+  onAttachmentsChange: (attachments: ReferenceFile[]) => void;
+  allowImage: boolean;
+  allowVideo: boolean;
   balance: number;
   tokenValueRupiah: number;
   onError: (message: string) => void;
@@ -40,8 +43,10 @@ export function GeneratorPanel({
   onResolutionChange,
   aspectRatio,
   onAspectRatioChange,
-  referenceFile,
-  onReferenceChange,
+  attachments,
+  onAttachmentsChange,
+  allowImage,
+  allowVideo,
   balance,
   tokenValueRupiah,
   onError,
@@ -168,12 +173,18 @@ export function GeneratorPanel({
       </div>
 
       <div className="mt-5">
-        <p className="mono-label text-muted">Gambar referensi</p>
+        <p className="mono-label text-muted">Lampiran</p>
+        <p className="mt-1 text-[10px] leading-relaxed text-muted">
+          Lampiran pertama dikirim ke provider render sebagai referensi visual; semuanya dibaca
+          model plan sebagai konteks.
+        </p>
         <div className="mt-2">
-          <AssetDropzone
-            file={referenceFile}
-            onChange={onReferenceChange}
+          <AttachmentTray
+            attachments={attachments}
+            onChange={onAttachmentsChange}
             disabled={disabled}
+            allowImage={allowImage}
+            allowVideo={allowVideo}
             onError={onError}
           />
         </div>

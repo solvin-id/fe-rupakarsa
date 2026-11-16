@@ -47,7 +47,8 @@ export function GenerationCard({
   const completed = generation.status === "COMPLETED";
   const failed = generation.status === "FAILED";
   const busy = generation.status === "QUEUED" || generation.status === "RENDERING";
-  const outputUrl = generation.outputUrl;
+  const purged = Boolean(generation.outputPurgedAt);
+  const outputUrl = purged ? null : generation.outputUrl;
 
   return (
     <article
@@ -61,7 +62,11 @@ export function GenerationCard({
         className="relative w-28 shrink-0 overflow-hidden rounded-xl sm:w-32"
         aria-label={`Lihat detail ${generation.modelName}`}
       >
-        {completed && outputUrl ? (
+        {completed && purged ? (
+          <div className="flex aspect-[4/3] w-full items-center justify-center rounded-xl bg-canvas-2 px-1 text-center text-[9px] leading-tight text-muted">
+            Aset dibersihkan
+          </div>
+        ) : completed && outputUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={outputUrl}
@@ -128,6 +133,10 @@ export function GenerationCard({
         ) : (
           <p className="mt-1.5 text-[9px] text-muted/70">{formatRelative(generation.createdAt)}</p>
         )}
+
+        {purged && completed ? (
+          <p className="mt-1 text-[9px] text-muted">Hasil dibersihkan setelah masa retensi</p>
+        ) : null}
 
         <div className="mt-auto flex items-center gap-0.5 pt-1.5">
           <button

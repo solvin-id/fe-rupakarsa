@@ -1,6 +1,6 @@
 "use client";
 
-import { FileImage, Image as ImageIcon, UploadCloud, X } from "lucide-react";
+import { FileImage, FileVideo, Image as ImageIcon, UploadCloud, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 export interface ReferenceFile {
@@ -8,14 +8,56 @@ export interface ReferenceFile {
   size: number;
   url: string;
   file: File;
+  kind: "IMAGE" | "VIDEO";
 }
 
-const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
-const MAX_BYTES = 10 * 1024 * 1024;
+const IMAGE_ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
+const VIDEO_ACCEPTED = ["video/mp4", "video/webm"];
+export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+
+export type DropzoneAccept = "image" | "video" | "both";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function acceptedTypes(accept: DropzoneAccept): string[] {
+  if (accept === "image") return IMAGE_ACCEPTED;
+  if (accept === "video") return VIDEO_ACCEPTED;
+  return [...IMAGE_ACCEPTED, ...VIDEO_ACCEPTED];
+}
+
+export function kindForMime(mime: string): "IMAGE" | "VIDEO" {
+  return mime.startsWith("video/") ? "VIDEO" : "IMAGE";
+}
+
+export function formatLabel(accept: DropzoneAccept): string {
+  if (accept === "image") return "JPG, JPEG, PNG, WEBP · maks. 10 MB";
+  if (accept === "video") return "MP4, WEBM · maks. 100 MB";
+  return "JPG, PNG, WEBP, MP4, WEBM · gambar 10 MB / video 100 MB";
+}
+
+export function validateReferenceFile(
+  file: File,
+  accept: DropzoneAccept,
+): { ok: true; kind: "IMAGE" | "VIDEO" } | { ok: false; message: string } {
+  const types = acceptedTypes(accept);
+  if (!types.includes(file.type)) {
+    if (accept === "video") return { ok: false, message: "Format harus MP4 atau WEBM." };
+    if (accept === "image") return { ok: false, message: "Format harus JPG, JPEG, PNG, atau WEBP." };
+    return { ok: false, message: "Format harus JPG, JPEG, PNG, WEBP, MP4, atau WEBM." };
+  }
+  const kind = kindForMime(file.type);
+  const limit = kind === "VIDEO" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+  if (file.size > limit) {
+    return {
+      ok: false,
+      message: kind === "VIDEO" ? "Ukuran video maksimal 100 MB." : "Ukuran gambar maksimal 10 MB.",
+    };
+  }
+  return { ok: true, kind };
 }
 
 export function AssetDropzone({
@@ -23,11 +65,13 @@ export function AssetDropzone({
   onChange,
   disabled = false,
   onError,
+  accept = "both",
 }: {
   file: ReferenceFile | null;
   onChange: (file: ReferenceFile | null) => void;
   disabled?: boolean;
   onError: (message: string) => void;
+  accept?: DropzoneAccept;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -42,31 +86,49 @@ export function AssetDropzone({
   function handleFiles(files: FileList | null): void {
     const next = files?.[0];
     if (!next) return;
-    if (!ACCEPTED.includes(next.type)) {
-      onError("Format harus JPG, JPEG, PNG, atau WEBP.");
+    const result = validateReferenceFile(next, accept);
+    if (!result.ok) {
+      onError(result.message);
       return;
     }
-    if (next.size > MAX_BYTES) {
-      onError("Ukuran gambar maksimal 10 MB.");
-      return;
-    }
-    onChange({ name: next.name, size: next.size, url: URL.createObjectURL(next), file: next });
+    onChange({
+      name: next.name,
+      size: next.size,
+      url: URL.createObjectURL(next),
+      file: next,
+      kind: result.kind,
+    });
   }
 
   if (file) {
     return (
       <div className="flex items-center gap-3 rounded-2xl border border-border bg-white p-3">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={file.url}
-          alt={file.name}
-          className="size-16 shrink-0 rounded-xl border border-border object-cover"
-        />
+        {file.kind === "VIDEO" ? (
+          <video
+            src={file.url}
+            muted
+            controls
+            className="size-16 shrink-0 rounded-xl border border-border object-cover"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={file.url}
+            alt={file.name}
+            className="size-16 shrink-0 rounded-xl border border-border object-cover"
+          />
+        )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-xs font-medium text-ink">{file.name}</p>
-          <p className="mt-0.5 text-[10px] text-muted">{formatSize(file.size)} · referensi visual</p>
+          <p className="mt-0.5 text-[10px] text-muted">
+            {formatSize(file.size)} · {file.kind === "VIDEO" ? "video" : "gambar"}
+          </p>
           <p className="mt-1 flex items-center gap-1 text-[10px] text-success">
-            <FileImage className="size-3" aria-hidden />
+            {file.kind === "VIDEO" ? (
+              <FileVideo className="size-3" aria-hidden />
+            ) : (
+              <FileImage className="size-3" aria-hidden />
+            )}
             Siap dilampirkan
           </p>
         </div>
@@ -74,7 +136,7 @@ export function AssetDropzone({
           type="button"
           onClick={() => onChange(null)}
           disabled={disabled}
-          aria-label="Hapus gambar referensi"
+          aria-label="Hapus lampiran"
           className="flex size-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-danger/5 hover:text-danger disabled:opacity-40"
         >
           <X className="size-4" aria-hidden />
@@ -102,7 +164,7 @@ export function AssetDropzone({
       <input
         ref={inputRef}
         type="file"
-        accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+        accept={acceptedTypes(accept).join(",")}
         className="sr-only"
         disabled={disabled}
         onChange={(event) => {
@@ -119,10 +181,10 @@ export function AssetDropzone({
         <span className="flex size-10 items-center justify-center rounded-full border border-border bg-white text-ink">
           <UploadCloud className="size-4" aria-hidden />
         </span>
-        <span className="text-xs font-medium text-ink">Tarik gambar ke sini atau pilih file</span>
+        <span className="text-xs font-medium text-ink">Tarik berkas ke sini atau pilih file</span>
         <span className="flex items-center gap-1 text-[10px] text-muted">
           <ImageIcon className="size-3" aria-hidden />
-          JPG, JPEG, PNG, WEBP · maks. 10 MB
+          {formatLabel(accept)}
         </span>
       </button>
     </div>

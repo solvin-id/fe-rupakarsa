@@ -4,6 +4,7 @@ import {
   ArrowRight,
   Check,
   CircleDollarSign,
+  FileText,
   Loader2,
   Sparkles,
   Wand2,
@@ -13,7 +14,7 @@ import { Button } from "@rupakarsa/shared/ui";
 import { TextArea } from "@rupakarsa/shared/ui";
 import { formatRupiahFromTokens, formatTokens } from "@rupakarsa/shared/lib/format";
 import type { PlanCost } from "@rupakarsa/shared/lib/tokens";
-import type { AiModel, GenerationStatus } from "@rupakarsa/shared/lib/types";
+import type { AiModel, GenerationStatus, MediaCapability } from "@rupakarsa/shared/lib/types";
 
 export interface PlanCanvasProps {
   rawPrompt: string;
@@ -40,6 +41,11 @@ export interface PlanCanvasProps {
   canGenerate: boolean;
   activeStatus: GenerationStatus | null;
   showSimulation: boolean;
+  planMode: boolean;
+  onPlanModeChange: (value: boolean) => void;
+  analysisText: string;
+  planModelCapabilities: MediaCapability[];
+  planModelName: string | null;
 }
 
 const STATUS_LABEL: Record<GenerationStatus, string> = {
@@ -74,6 +80,11 @@ export function PlanCanvas({
   canGenerate,
   activeStatus,
   showSimulation,
+  planMode,
+  onPlanModeChange,
+  analysisText,
+  planModelCapabilities,
+  planModelName,
 }: PlanCanvasProps) {
   const cost = model?.tokenCost ?? 0;
   const projected = Math.max(0, balance - cost);
@@ -81,41 +92,63 @@ export function PlanCanvas({
     ? `Gratis · ${formatTokens(freePlanRemaining)} tersisa`
     : `${planCost.tokens} token`;
 
+  const missingAttachments = (["IMAGE", "VIDEO"] as const).filter(
+    (capability) => !planModelCapabilities.includes(capability),
+  );
+
   return (
     <section id="plan-canvas" className="card overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
         <div>
           <p className="mono-label text-muted">Dual-mode prompt</p>
           <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-ink">Plan Canvas</h2>
+          {planModelName ? (
+            <p className="mt-1 text-[10px] text-muted">Model plan: {planModelName}</p>
+          ) : null}
         </div>
-        <div className="flex items-center gap-1.5 text-[10px]">
-          <span
-            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${
-              planState === "ready"
-                ? "bg-success/10 text-success"
-                : "bg-ink text-canvas"
-            }`}
-          >
-            {planState === "ready" ? (
-              <Check className="size-3" aria-hidden />
-            ) : (
-              <span className="font-mono">1</span>
-            )}
-            <span>Plan</span>
-          </span>
-          <span className="h-px w-4 bg-border" aria-hidden />
-          <span
-            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${
-              generating ? "bg-accent text-white" : "bg-surface-2 text-muted"
-            }`}
-          >
-            <span className="font-mono">2</span>
-            <span>Implement</span>
-          </span>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1.5 rounded-full border border-border bg-surface-2/60 px-2.5 py-1 text-[10px] font-medium text-ink">
+            <input
+              type="checkbox"
+              checked={planMode}
+              onChange={(event) => onPlanModeChange(event.target.checked)}
+              className="size-3 accent-[#f04e23]"
+            />
+            Plan mode
+          </label>
+          <div className="flex items-center gap-1.5 text-[10px]">
+            <span
+              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${
+                planMode && planState === "ready" ? "bg-success/10 text-success" : "bg-ink text-canvas"
+              }`}
+            >
+              {planMode && planState === "ready" ? (
+                <Check className="size-3" aria-hidden />
+              ) : (
+                <span className="font-mono">1</span>
+              )}
+              <span>Plan</span>
+            </span>
+            <span className="h-px w-4 bg-border" aria-hidden />
+            <span
+              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${
+                generating ? "bg-accent text-white" : "bg-surface-2 text-muted"
+              }`}
+            >
+              <span className="font-mono">2</span>
+              <span>Implement</span>
+            </span>
+          </div>
         </div>
       </header>
 
       <div className="p-5 sm:p-6">
+        {missingAttachments.length > 0 ? (
+          <div className="mb-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] leading-relaxed text-ink">
+            Model plan tidak menerima {missingAttachments.join(", ")}; lampiran tipe itu dinonaktifkan.
+          </div>
+        ) : null}
+
         <div>
           <div className="flex items-center justify-between gap-2">
             <label htmlFor="raw-prompt" className="mono-label text-muted">
@@ -143,7 +176,7 @@ export function PlanCanvas({
             variant="dark"
             size="sm"
             loading={planState === "planning"}
-            disabled={!rawPrompt.trim() || planState === "planning" || !model}
+            disabled={!planMode || !rawPrompt.trim() || planState === "planning" || !model}
             icon={<Wand2 className="size-3.5" aria-hidden />}
             onClick={onPlan}
           >
@@ -151,16 +184,18 @@ export function PlanCanvas({
           </Button>
         </div>
 
-        <div className="mt-2 flex items-center justify-end gap-1.5 text-[10px] text-muted">
-          <Sparkles className="size-3 text-accent" aria-hidden />
-          Biaya plan: <span className="font-medium text-ink">{planLabel}</span>
-        </div>
+        {planMode ? (
+          <div className="mt-2 flex items-center justify-end gap-1.5 text-[10px] text-muted">
+            <Sparkles className="size-3 text-accent" aria-hidden />
+            Biaya plan: <span className="font-medium text-ink">{planLabel}</span>
+          </div>
+        ) : null}
 
-        {planState === "planning" ? (
+        {planMode && planState === "planning" ? (
           <div className="mt-4 rounded-2xl border border-accent-2/20 bg-accent-2-soft/50 p-4">
             <div className="flex items-center gap-2 text-xs text-accent-2">
               <Loader2 className="size-3.5 animate-spin" aria-hidden />
-              DeepSeek-V3 sedang menyusun blueprint…
+              Model plan sedang menyusun blueprint…
             </div>
             <div className="mt-3 space-y-2">
               <div className="h-2 w-full animate-pulse rounded-full bg-accent-2/20" />
@@ -170,7 +205,7 @@ export function PlanCanvas({
           </div>
         ) : null}
 
-        {planState === "ready" ? (
+        {planMode && planState === "ready" ? (
           <div className="mt-4 rounded-2xl border border-accent-2/20 bg-accent-2-soft/40 p-4">
             <div className="flex items-center justify-between gap-2">
               <p className="mono-label text-[9px] text-accent-2">Plan blueprint</p>
@@ -201,6 +236,32 @@ export function PlanCanvas({
                 className="mt-1.5 min-h-16 bg-white/80 text-[11px]"
               />
             </details>
+          </div>
+        ) : null}
+
+        {!planMode ? (
+          <div className="mt-4 rounded-2xl border border-border bg-surface-2/40 p-4">
+            <p className="mono-label text-[9px] text-muted">Analisis lampiran</p>
+            {analysisText.trim().length > 0 ? (
+              <p className="mt-1.5 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-xl bg-white/70 p-3 font-mono text-[11px] leading-relaxed text-ink">
+                {analysisText}
+              </p>
+            ) : (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+                Tanpa lampiran. Model plan tetap menyusun prompt final dari brief dan pre-context proyek.
+              </p>
+            )}
+            <Button
+              variant="primary"
+              size="lg"
+              className="mt-3 w-full"
+              disabled={!canGenerate || generating}
+              loading={generating}
+              icon={<ArrowRight className="size-4" aria-hidden />}
+              onClick={onGenerate}
+            >
+              Generate sekarang
+            </Button>
           </div>
         ) : null}
 
@@ -258,17 +319,24 @@ export function PlanCanvas({
             </div>
           ) : null}
 
-          <Button
-            variant="primary"
-            size="lg"
-            className="mt-4 w-full"
-            disabled={!canGenerate || generating}
-            loading={generating}
-            icon={<ArrowRight className="size-4" aria-hidden />}
-            onClick={onGenerate}
-          >
-            Generate konten
-          </Button>
+          {planMode ? (
+            <Button
+              variant="primary"
+              size="lg"
+              className="mt-4 w-full"
+              disabled={!canGenerate || generating}
+              loading={generating}
+              icon={<ArrowRight className="size-4" aria-hidden />}
+              onClick={onGenerate}
+            >
+              Generate konten
+            </Button>
+          ) : (
+            <p className="mt-4 flex items-center gap-1.5 text-[10px] text-canvas/50">
+              <FileText className="size-3" aria-hidden />
+              Plan mode mati: reprompt langsung dipakai server.
+            </p>
+          )}
 
           {showSimulation ? (
             <label className="mt-3 flex items-center justify-center gap-2 text-[10px] text-canvas/50">

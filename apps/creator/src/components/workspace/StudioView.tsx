@@ -10,6 +10,7 @@ import { usePublicConfigQuery, useSessionQuery } from "@rupakarsa/shared/hooks/u
 import {
   useCreatorModelsQuery,
   useDeleteGenerationMutation,
+  useFolderContextsQuery,
   useFolderGenerationsQuery,
   useFoldersQuery,
   useGenerateMutation,
@@ -20,7 +21,8 @@ import {
 import { queryKeys } from "@rupakarsa/shared/lib/api/keys";
 import { formatDateTime, formatRelative, formatTokens } from "@rupakarsa/shared/lib/format";
 import { isVideoUrl } from "@rupakarsa/shared/lib/media";
-import type { Generation, GenerationStatus, MediaType } from "@rupakarsa/shared/lib/types";
+import { pickModel } from "@rupakarsa/shared/lib/models";
+import type { Generation, GenerationStatus, MediaCapability, MediaType } from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 import { Button } from "@rupakarsa/shared/ui";
 import { Dialog } from "@rupakarsa/shared/ui";
@@ -28,6 +30,7 @@ import { Dialog } from "@rupakarsa/shared/ui";
 import { GeneratorPanel } from "@/components/workspace/GeneratorPanel";
 import { HistoryPanel } from "@/components/workspace/HistoryPanel";
 import { PlanCanvas } from "@/components/workspace/PlanCanvas";
+import { PreContextPanel } from "@/components/workspace/PreContextPanel";
 import type { ReferenceFile } from "@/components/workspace/AssetDropzone";
 
 const STATUS_LABEL: Record<GenerationStatus, string> = {
@@ -37,12 +40,20 @@ const STATUS_LABEL: Record<GenerationStatus, string> = {
   FAILED: "Failed",
 };
 
+const PLAN_MODE_KEY = "rupakarsa.planMode";
+
+function readPlanMode(): boolean {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(PLAN_MODE_KEY) !== "false";
+}
+
 export function StudioView({ folderId }: { folderId: string }) {
   const sessionQuery = useSessionQuery();
   const foldersQuery = useFoldersQuery();
   const generationsQuery = useFolderGenerationsQuery(folderId);
   const modelsQuery = useCreatorModelsQuery();
   const configQuery = usePublicConfigQuery();
+  const contextsQuery = useFolderContextsQuery(folderId);
 
   const planMutation = usePlanMutation();
   const generateMutation = useGenerateMutation();
@@ -61,24 +72,32 @@ export function StudioView({ folderId }: { folderId: string }) {
   const [direction, setDirection] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [planReady, setPlanReady] = useState(false);
-  const [referenceFile, setReferenceFile] = useState<ReferenceFile | null>(null);
+  const [planMode, setPlanMode] = useState<boolean>(readPlanMode);
+  const [attachments, setAttachments] = useState<ReferenceFile[]>([]);
+  const [analysisText, setAnalysisText] = useState("");
   const [simulateFailure, setSimulateFailure] = useState(false);
   const [activeGenerationId, setActiveGenerationId] = useState<string | null>(null);
   const [detailTarget, setDetailTarget] = useState<Generation | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Generation | null>(null);
 
   const handledStatusRef = useRef<string | null>(null);
+  const uploadedKeysRef = useRef<Map<File, string>>(new Map());
 
   const session = sessionQuery.data;
   const folder = (foldersQuery.data ?? []).find((item) => item.id === folderId) ?? null;
   const models = useMemo(() => modelsQuery.data ?? [], [modelsQuery.data]);
   const config = configQuery.data;
 
+  const planModelCapabilities: MediaCapability[] = config?.planModel?.inputCapabilities ?? [];
+  const allowImage = planModelCapabilities.includes("IMAGE");
+  const allowVideo = planModelCapabilities.includes("VIDEO");
+  const planModelMissing = config ? config.planModel === null : false;
+
   const activeModels = useMemo(
     () => models.filter((item) => item.isActive && item.mediaType === mediaType),
     [models, mediaType],
   );
-  const model = activeModels.find((item) => item.id === modelId) ?? activeModels[0] ?? null;
+  const model = pickModel(models, mediaType, modelId);
 
   const effectiveDuration = model?.allowedParams.durations?.includes(durationSec ?? -1)
     ? durationSec
@@ -118,6 +137,7 @@ export function StudioView({ folderId }: { folderId: string }) {
     void queryClient.invalidateQueries({ queryKey: queryKeys.generations(folderId) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.folders });
     void queryClient.invalidateQueries({ queryKey: queryKeys.session });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.storage });
     pushToast(
       current.status === "COMPLETED" ? "success" : "error",
       current.status === "COMPLETED"
@@ -133,11 +153,23 @@ export function StudioView({ folderId }: { folderId: string }) {
   }, [session?.workspace.freePlanRemaining, config?.pricing.planModeTokenCost]);
 
   const balance = session?.workspace.tokenBalance ?? 0;
-  const canGenerate = Boolean(plannedPrompt.trim() && model && !generating && balance >= (model?.tokenCost ?? 0));
+  const hasPrompt = planMode ? plannedPrompt.trim().length > 0 : rawPrompt.trim().length > 0;
+  const canGenerate = Boolean(hasPrompt && model && !generating && balance >= (model?.tokenCost ?? 0));
 
   const videos = folderGenerations.filter((item) => item.mediaType === "VIDEO").length;
   const images = folderGenerations.filter((item) => item.mediaType === "IMAGE").length;
   const tokensUsed = folderGenerations.reduce((total, item) => total + item.tokensCharged, 0);
+  const contexts = contextsQuery.data ?? [];
+
+  function allowedAttachment(item: ReferenceFile): boolean {
+    return item.kind === "VIDEO" ? allowVideo : allowImage;
+  }
+
+  function resetDraft(): void {
+    setPlanReady(false);
+    setPlannedPrompt("");
+    setAnalysisText("");
+  }
 
   function handleMediaTypeChange(next: MediaType): void {
     setMediaType(next);
@@ -145,8 +177,7 @@ export function StudioView({ folderId }: { folderId: string }) {
     setDurationSec(undefined);
     setResolution("");
     setAspectRatio("");
-    setPlanReady(false);
-    setPlannedPrompt("");
+    resetDraft();
   }
 
   function handleModelChange(id: string): void {
@@ -154,8 +185,34 @@ export function StudioView({ folderId }: { folderId: string }) {
     setDurationSec(undefined);
     setResolution("");
     setAspectRatio("");
-    setPlanReady(false);
-    setPlannedPrompt("");
+    resetDraft();
+  }
+
+  function handlePlanModeChange(next: boolean): void {
+    setPlanMode(next);
+    window.localStorage.setItem(PLAN_MODE_KEY, String(next));
+    resetDraft();
+  }
+
+  function handleAttachmentsChange(next: ReferenceFile[]): void {
+    setAttachments(next.filter(allowedAttachment));
+  }
+
+  async function uploadAll(): Promise<{ keys: string[]; ids: string[] }> {
+    const keys: string[] = [];
+    const ids: string[] = [];
+    for (const item of attachments) {
+      const cached = uploadedKeysRef.current.get(item.file);
+      if (cached) {
+        keys.push(cached);
+        continue;
+      }
+      const uploaded = await uploadReference.mutateAsync(item.file);
+      uploadedKeysRef.current.set(item.file, uploaded.key);
+      keys.push(uploaded.key);
+      ids.push(uploaded.id);
+    }
+    return { keys, ids };
   }
 
   function handlePlan(): void {
@@ -169,37 +226,53 @@ export function StudioView({ folderId }: { folderId: string }) {
       return;
     }
 
-    planMutation.mutate(
-      {
-        modelId: model.id,
-        rawPrompt,
-        durationSec: model.mediaType === "VIDEO" ? effectiveDuration : undefined,
-        resolution: effectiveResolution,
-        aspectRatio: effectiveAspect,
-        hasReference: Boolean(referenceFile),
-      },
-      {
-        onSuccess: (data) => {
-          setPlannedPrompt(data.blueprint.prompt);
-          setDirection(data.blueprint.direction);
-          setNegativePrompt(data.blueprint.negativePrompt);
-          setPlanReady(true);
-          pushToast(
-            "success",
-            data.cost.usesFreeQuota
-              ? "Plan dibuat dengan kuota gratis."
-              : "Plan dibuat. 1 token terpakai.",
-          );
-        },
-        onError: (error) => pushToast("error", error.message),
-      },
-    );
+    void (async () => {
+      try {
+        const { keys } = await uploadAll();
+        planMutation.mutate(
+          {
+            folderId,
+            modelId: model.id,
+            rawPrompt,
+            durationSec: model.mediaType === "VIDEO" ? effectiveDuration : undefined,
+            resolution: effectiveResolution,
+            aspectRatio: effectiveAspect,
+            attachmentKeys: keys,
+            contextIds: [],
+          },
+          {
+            onSuccess: (data) => {
+              setPlannedPrompt(data.blueprint.prompt);
+              setDirection(data.blueprint.direction);
+              setNegativePrompt(data.blueprint.negativePrompt);
+              setAnalysisText(
+                data.analysis.attachments.map((entry) => entry.text).join("\n\n"),
+              );
+              setPlanReady(true);
+              pushToast(
+                "success",
+                data.cost.usesFreeQuota
+                  ? "Plan dibuat dengan kuota gratis."
+                  : "Plan dibuat. 1 token terpakai.",
+              );
+            },
+            onError: (error) => pushToast("error", error.message),
+          },
+        );
+      } catch (error) {
+        pushToast("error", error instanceof Error ? error.message : "Unggahan lampiran gagal.");
+      }
+    })();
   }
 
   async function handleGenerate(): Promise<void> {
     if (!model) return;
-    if (!plannedPrompt.trim()) {
+    if (planMode && !plannedPrompt.trim()) {
       pushToast("error", "Buat plan terlebih dahulu.");
+      return;
+    }
+    if (!planMode && !rawPrompt.trim()) {
+      pushToast("error", "Tulis brief terlebih dahulu.");
       return;
     }
     if (balance < model.tokenCost) {
@@ -209,24 +282,20 @@ export function StudioView({ folderId }: { folderId: string }) {
     if (generating) return;
 
     try {
-      let referenceImageUrl: string | null = null;
-      if (referenceFile) {
-        const uploaded = await uploadReference.mutateAsync(referenceFile.file);
-        referenceImageUrl = uploaded.url;
-      }
-
+      const { keys } = await uploadAll();
       const created = await generateMutation.mutateAsync({
         folderId,
         modelId: model.id,
         rawPrompt: rawPrompt.trim(),
-        plannedPrompt: plannedPrompt.trim(),
-        referenceImageUrl,
+        planMode,
+        finalPrompt: planMode ? plannedPrompt.trim() : null,
+        attachmentKeys: keys,
+        contextIds: [],
         selectedParams: {
           durationSec: model.mediaType === "VIDEO" ? effectiveDuration : undefined,
           resolution: effectiveResolution,
           aspectRatio: effectiveAspect,
         },
-        simulateFailure,
       });
 
       handledStatusRef.current = null;
@@ -246,6 +315,7 @@ export function StudioView({ folderId }: { folderId: string }) {
     setPlannedPrompt(generation.plannedPrompt);
     setDirection("");
     setNegativePrompt("");
+    setAnalysisText(generation.analysisSnapshot);
     setPlanReady(true);
     setDetailTarget(null);
     document.getElementById("plan-canvas")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -253,14 +323,12 @@ export function StudioView({ folderId }: { folderId: string }) {
   }
 
   function handleDownload(generation: Generation): void {
-    if (!generation.outputUrl) {
-      pushToast("error", "Hasil render belum tersedia.");
+    if (!generation.outputUrl || generation.outputPurgedAt) {
+      pushToast("error", "Hasil render sudah tidak tersedia.");
       return;
     }
-    // The API answers `?download=1` with Content-Disposition: attachment, so a same-tab anchor
-    // downloads the file without a popup or a navigation away from the studio.
     const link = document.createElement("a");
-    link.href = `${generation.outputUrl}?download=1`;
+    link.href = `${generation.outputUrl}${generation.outputUrl.includes("?") ? "&" : "?"}download=1`;
     link.rel = "noopener";
     document.body.append(link);
     link.click();
@@ -337,8 +405,15 @@ export function StudioView({ folderId }: { folderId: string }) {
         </div>
       </header>
 
+      {planModelMissing ? (
+        <div className="mt-4 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] leading-relaxed text-ink">
+          Model plan belum disetel. Setel di CMS → Settings → AI. Brief tetap bisa dirender dalam
+          mode langsung tanpa analisis lampiran.
+        </div>
+      ) : null}
+
       <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
-        <div className="xl:sticky xl:top-20 xl:self-start">
+        <div className="flex flex-col gap-4 xl:sticky xl:top-20 xl:self-start">
           <GeneratorPanel
             mediaType={mediaType}
             onMediaTypeChange={handleMediaTypeChange}
@@ -351,12 +426,21 @@ export function StudioView({ folderId }: { folderId: string }) {
             onResolutionChange={setResolution}
             aspectRatio={effectiveAspect}
             onAspectRatioChange={setAspectRatio}
-            referenceFile={referenceFile}
-            onReferenceChange={setReferenceFile}
+            attachments={attachments}
+            onAttachmentsChange={handleAttachmentsChange}
+            allowImage={allowImage}
+            allowVideo={allowVideo}
             balance={balance}
             tokenValueRupiah={config?.pricing.tokenValueRupiah ?? 500}
             onError={(message) => pushToast("error", message)}
             disabled={generating}
+          />
+
+          <PreContextPanel
+            folderId={folderId}
+            contexts={contexts}
+            disabled={generating}
+            allowVideoAnalysis={allowVideo}
           />
         </div>
 
@@ -386,6 +470,11 @@ export function StudioView({ folderId }: { folderId: string }) {
             canGenerate={canGenerate}
             activeStatus={activeStatus}
             showSimulation={config?.features.simulation ?? false}
+            planMode={planMode}
+            onPlanModeChange={handlePlanModeChange}
+            analysisText={analysisText}
+            planModelCapabilities={planModelCapabilities}
+            planModelName={config?.planModel?.name ?? null}
           />
 
           <HistoryPanel
@@ -418,7 +507,11 @@ export function StudioView({ folderId }: { folderId: string }) {
               <Button
                 variant="secondary"
                 onClick={() => handleDownload(detailTarget)}
-                disabled={detailTarget.status !== "COMPLETED" || !detailTarget.outputUrl}
+                disabled={
+                  detailTarget.status !== "COMPLETED" ||
+                  !detailTarget.outputUrl ||
+                  Boolean(detailTarget.outputPurgedAt)
+                }
               >
                 Unduh hasil
               </Button>
@@ -431,7 +524,11 @@ export function StudioView({ folderId }: { folderId: string }) {
       >
         {detailTarget ? (
           <div className="flex flex-col gap-4">
-            {detailTarget.status === "COMPLETED" && detailTarget.outputUrl ? (
+            {detailTarget.outputPurgedAt ? (
+              <div className="flex aspect-video items-center justify-center rounded-2xl border border-dashed border-border bg-surface-2/50 text-center text-sm text-muted">
+                Hasil dibersihkan setelah masa retensi penyimpanan.
+              </div>
+            ) : detailTarget.status === "COMPLETED" && detailTarget.outputUrl ? (
               isVideoUrl(detailTarget.outputUrl) ? (
                 <video
                   controls
@@ -503,6 +600,24 @@ export function StudioView({ folderId }: { folderId: string }) {
                 {detailTarget.plannedPrompt}
               </p>
             </div>
+
+            {detailTarget.analysisSnapshot ? (
+              <div>
+                <p className="mono-label text-muted">Analisis lampiran</p>
+                <p className="mt-1.5 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border bg-surface-2/50 p-3 font-mono text-[11px] leading-relaxed text-ink">
+                  {detailTarget.analysisSnapshot}
+                </p>
+              </div>
+            ) : null}
+
+            {detailTarget.preContextSnapshot ? (
+              <div>
+                <p className="mono-label text-muted">Pre-context</p>
+                <p className="mt-1.5 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-xl border border-border bg-surface-2/50 p-3 text-[11px] leading-relaxed text-ink">
+                  {detailTarget.preContextSnapshot}
+                </p>
+              </div>
+            ) : null}
 
             {detailTarget.referenceImageUrl ? (
               <p className="text-[11px] text-muted">
