@@ -10,11 +10,15 @@
     "./surface": "./src/components/surface/index.ts",
     "./lib": "./src/lib/index.ts",
     "./lib/*": "./src/lib/*.ts",
+    "./lib/api/*": "./src/lib/api/*.ts",
     "./lib/utils/*": "./src/lib/utils/*.ts",
+    "./hooks/*": "./src/hooks/*.ts",
+    "./providers": "./src/providers/index.ts",
     "./stores/*": "./src/stores/*.ts",
     "./theme.css": "./src/styles/theme.css"
   },
   "peerDependencies": {
+    "@tanstack/react-query": ">=5",
     "next": ">=16",
     "react": ">=19",
     "react-dom": ">=19",

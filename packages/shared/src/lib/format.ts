@@ -1,7 +1,5 @@
 import type { WorkspaceRole } from "./types";
 
-export const TOKEN_RUPIAH = 500;
-
 const numberFormatter = new Intl.NumberFormat("id-ID");
 
 export function formatWorkspaceRole(role: WorkspaceRole): string {
@@ -22,8 +20,8 @@ export function formatRupiah(value: number): string {
   }).format(value);
 }
 
-export function formatRupiahFromTokens(tokens: number): string {
-  return formatRupiah(tokens * TOKEN_RUPIAH);
+export function formatRupiahFromTokens(tokens: number, tokenValueRupiah: number): string {
+  return formatRupiah(tokens * tokenValueRupiah);
 }
 
 export function formatDate(iso: string | null): string {

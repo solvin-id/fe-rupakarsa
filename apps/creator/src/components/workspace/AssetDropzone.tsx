@@ -7,6 +7,7 @@ export interface ReferenceFile {
   name: string;
   size: number;
   url: string;
+  file: File;
 }
 
 const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
@@ -49,7 +50,7 @@ export function AssetDropzone({
       onError("Ukuran gambar maksimal 10 MB.");
       return;
     }
-    onChange({ name: next.name, size: next.size, url: URL.createObjectURL(next) });
+    onChange({ name: next.name, size: next.size, url: URL.createObjectURL(next), file: next });
   }
 
   if (file) {

@@ -11,7 +11,7 @@ import {
   X,
 } from "lucide-react";
 
-import { GradientArt, type GradientVariant } from "@rupakarsa/shared/brand";
+import { GradientArt } from "@rupakarsa/shared/brand";
 import { formatRelative, formatTokens } from "@rupakarsa/shared/lib/format";
 import type { Generation } from "@rupakarsa/shared/lib/types";
 
@@ -28,14 +28,6 @@ const STATUS_LABELS: Record<Generation["status"], string> = {
   COMPLETED: "Completed",
   FAILED: "Failed",
 };
-
-const VARIANTS: GradientVariant[] = ["sunset", "violet", "lime", "ocean", "peach", "sand", "night"];
-
-function variantFor(generation: Generation): GradientVariant {
-  const key = generation.outputUrl?.replace("gradient:", "");
-  if (key && VARIANTS.includes(key as GradientVariant)) return key as GradientVariant;
-  return generation.mediaType === "VIDEO" ? "sunset" : "violet";
-}
 
 export function GenerationCard({
   generation,
@@ -55,6 +47,7 @@ export function GenerationCard({
   const completed = generation.status === "COMPLETED";
   const failed = generation.status === "FAILED";
   const busy = generation.status === "QUEUED" || generation.status === "RENDERING";
+  const outputUrl = generation.outputUrl;
 
   return (
     <article
@@ -68,8 +61,15 @@ export function GenerationCard({
         className="relative w-28 shrink-0 overflow-hidden rounded-xl sm:w-32"
         aria-label={`Lihat detail ${generation.modelName}`}
       >
-        {completed ? (
-          <GradientArt variant={variantFor(generation)} rounded="rounded-xl" className="aspect-[4/3] w-full">
+        {completed && outputUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={outputUrl}
+            alt={generation.modelName}
+            className="aspect-[4/3] w-full rounded-xl object-cover"
+          />
+        ) : completed ? (
+          <GradientArt variant="sunset" rounded="rounded-xl" className="aspect-[4/3] w-full">
             <div className="relative z-10 flex h-full items-center justify-center">
               <span className="flex size-8 items-center justify-center rounded-full border border-white/30 bg-white/15 text-white backdrop-blur transition-transform group-hover:scale-110">
                 {generation.mediaType === "VIDEO" ? (
@@ -141,7 +141,7 @@ export function GenerationCard({
           <button
             type="button"
             onClick={onDownload}
-            disabled={!completed}
+            disabled={!completed || !outputUrl}
             aria-label="Unduh hasil"
             className="flex size-7 items-center justify-center rounded-full text-muted transition-colors hover:bg-canvas-2 hover:text-ink disabled:opacity-30"
           >

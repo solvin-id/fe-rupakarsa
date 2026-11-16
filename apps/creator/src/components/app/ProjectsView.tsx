@@ -18,14 +18,19 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import { GradientArt, type GradientVariant } from "@rupakarsa/shared/brand";
+import { useSessionQuery } from "@rupakarsa/shared/hooks/use-session";
+import {
+  useCreateFolderMutation,
+  useDeleteFolderMutation,
+  useFoldersQuery,
+  useRenameFolderMutation,
+} from "@rupakarsa/shared/hooks/use-projects";
+import { formatRelative, formatTokens } from "@rupakarsa/shared/lib/format";
+import type { FolderWithStats } from "@rupakarsa/shared/lib/types";
+import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 import { Button } from "@rupakarsa/shared/ui";
 import { Dialog } from "@rupakarsa/shared/ui";
 import { Field, TextInput } from "@rupakarsa/shared/ui";
-import { formatRelative, formatTokens } from "@rupakarsa/shared/lib/format";
-import type { Folder, Generation } from "@rupakarsa/shared/lib/types";
-import { useProjectStore } from "@rupakarsa/shared/stores/project-store";
-import { useSessionStore } from "@rupakarsa/shared/stores/session-store";
-import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 
 const ART_VARIANTS: GradientVariant[] = ["sunset", "violet", "lime", "ocean", "peach", "sand", "night"];
 
@@ -33,14 +38,10 @@ function artFor(index: number): GradientVariant {
   return ART_VARIANTS[index % ART_VARIANTS.length] ?? "sunset";
 }
 
-function folderArt(folderId: string, generations: Generation[]): GradientVariant[] {
-  const items = generations.filter((item) => item.folderId === folderId).slice(0, 3);
-  if (items.length === 0) return ["sunset", "violet", "lime"];
-  return items.map((item, index) => {
-    const key = item.outputUrl?.replace("gradient:", "");
-    if (key && ART_VARIANTS.includes(key as GradientVariant)) return key as GradientVariant;
-    return artFor(index);
-  });
+/** Stable per-folder art: the list endpoint no longer ships generations, so derive from the id. */
+function folderArt(folderId: string): GradientVariant[] {
+  const seed = Array.from(folderId).reduce((total, char) => total + char.charCodeAt(0), 0);
+  return [0, 1, 2].map((offset) => artFor(seed + offset));
 }
 
 function FolderCollage({ variants }: { variants: GradientVariant[] }) {
@@ -60,54 +61,46 @@ function FolderCollage({ variants }: { variants: GradientVariant[] }) {
 
 export function ProjectsView() {
   const router = useRouter();
-  const session = useSessionStore((state) => state.session);
-  const folders = useProjectStore((state) => state.folders);
-  const generations = useProjectStore((state) => state.generations);
-  const hydrated = useProjectStore((state) => state.hydrated);
-  const createFolder = useProjectStore((state) => state.createFolder);
-  const renameFolder = useProjectStore((state) => state.renameFolder);
-  const deleteFolder = useProjectStore((state) => state.deleteFolder);
+  const sessionQuery = useSessionQuery();
+  const foldersQuery = useFoldersQuery();
+  const createFolder = useCreateFolderMutation();
+  const renameFolder = useRenameFolderMutation();
+  const deleteFolder = useDeleteFolderMutation();
   const pushToast = useUiStore((state) => state.pushToast);
 
   const [view, setView] = useState<"grid" | "list">("grid");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<Folder | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Folder | null>(null);
+  const [renameTarget, setRenameTarget] = useState<FolderWithStats | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FolderWithStats | null>(null);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
 
-  const workspaceId = session?.workspace.id;
-  const visibleFolders = useMemo(
-    () => folders.filter((folder) => folder.workspaceId === workspaceId),
-    [folders, workspaceId],
-  );
-  const visibleFolderIds = useMemo(
-    () => new Set(visibleFolders.map((folder) => folder.id)),
-    [visibleFolders],
-  );
-  const visibleGenerations = useMemo(
-    () => generations.filter((item) => visibleFolderIds.has(item.folderId)),
-    [generations, visibleFolderIds],
-  );
+  const folders = useMemo(() => foldersQuery.data ?? [], [foldersQuery.data]);
+  const workspaceName = sessionQuery.data?.workspace.name ?? "—";
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return visibleFolders;
-    return visibleFolders.filter(
+    if (!term) return folders;
+    return folders.filter(
       (folder) =>
         folder.name.toLowerCase().includes(term) ||
         folder.description.toLowerCase().includes(term),
     );
-  }, [visibleFolders, query]);
+  }, [folders, query]);
 
   const stats = useMemo(() => {
-    const videos = visibleGenerations.filter((item) => item.mediaType === "VIDEO").length;
-    const images = visibleGenerations.filter((item) => item.mediaType === "IMAGE").length;
-    const tokens = visibleGenerations.reduce((total, item) => total + item.tokensCharged, 0);
+    let videos = 0;
+    let images = 0;
+    let tokens = 0;
+    for (const folder of folders) {
+      videos += folder.videoCount;
+      images += folder.imageCount;
+      tokens += folder.tokensUsed;
+    }
     return { videos, images, tokens };
-  }, [visibleGenerations]);
+  }, [folders]);
 
   function openCreate(): void {
     setDraftName("");
@@ -115,7 +108,7 @@ export function ProjectsView() {
     setCreateOpen(true);
   }
 
-  function openRename(folder: Folder): void {
+  function openRename(folder: FolderWithStats): void {
     setDraftName(folder.name);
     setDraftDescription(folder.description);
     setRenameTarget(folder);
@@ -123,42 +116,71 @@ export function ProjectsView() {
   }
 
   function handleCreate(): void {
-    if (!session || draftName.trim().length < 2) {
+    if (draftName.trim().length < 2) {
       pushToast("error", "Nama folder minimal 2 karakter.");
       return;
     }
-    const folder = createFolder({
-      name: draftName,
-      description: draftDescription,
-      user: session.user,
-      workspaceId: session.workspace.id,
-    });
-    setCreateOpen(false);
-    pushToast("success", `Folder "${folder.name}" dibuat.`);
-    router.push(`/app/projects/${folder.id}`);
+    createFolder.mutate(
+      { name: draftName.trim(), description: draftDescription.trim() },
+      {
+        onSuccess: (folder) => {
+          setCreateOpen(false);
+          pushToast("success", `Folder "${folder.name}" dibuat.`);
+          router.push(`/app/projects/${folder.id}`);
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
   function handleRename(): void {
-    if (!renameTarget || draftName.trim().length < 2) {
+    if (!renameTarget) return;
+    if (draftName.trim().length < 2) {
       pushToast("error", "Nama folder minimal 2 karakter.");
       return;
     }
-    renameFolder(renameTarget.id, draftName, draftDescription);
-    setRenameTarget(null);
-    pushToast("success", "Folder diperbarui.");
+    renameFolder.mutate(
+      {
+        folderId: renameTarget.id,
+        name: draftName.trim(),
+        description: draftDescription.trim(),
+      },
+      {
+        onSuccess: () => {
+          setRenameTarget(null);
+          pushToast("success", "Folder diperbarui.");
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
   function handleDelete(): void {
     if (!deleteTarget) return;
-    deleteFolder(deleteTarget.id);
-    setDeleteTarget(null);
-    pushToast("success", "Folder dan riwayatnya dihapus.");
+    deleteFolder.mutate(deleteTarget.id, {
+      onSuccess: () => {
+        setDeleteTarget(null);
+        pushToast("success", "Folder dan riwayatnya dihapus.");
+      },
+      onError: (error) => pushToast("error", error.message),
+    });
   }
 
-  if (!hydrated) {
+  if (foldersQuery.isPending) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      <div className="animate-fade-up">
+        <div className="h-9 w-64 animate-pulse rounded-full bg-ink/5" />
+        <div className="mt-4 h-4 w-96 animate-pulse rounded-full bg-ink/5" />
+        <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((index) => (
+            <div key={index} className="h-16 animate-pulse rounded-2xl bg-ink/5" />
+          ))}
+        </div>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {[0, 1, 2].map((index) => (
+            <div key={index} className="h-72 animate-pulse rounded-[1.75rem] bg-ink/5" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -171,9 +193,9 @@ export function ProjectsView() {
           <h1 className="display mt-2 text-[clamp(2.2rem,4vw,3.4rem)] text-ink">Ruang kerja</h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
             Folder proyek di workspace{" "}
-            <span className="font-medium text-ink">{session?.workspace.name ?? "—"}</span>. Setiap
-            folder menyimpan brief, aset referensi, plan, dan riwayat render yang bisa dibuka semua
-            anggota workspace.
+            <span className="font-medium text-ink">{workspaceName}</span>. Setiap folder menyimpan
+            brief, aset referensi, plan, dan riwayat render yang bisa dibuka semua anggota
+            workspace.
           </p>
         </div>
         <Button
@@ -188,7 +210,7 @@ export function ProjectsView() {
 
       <div className="mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Folder proyek", value: formatTokens(visibleFolders.length), icon: LayoutGrid },
+          { label: "Folder proyek", value: formatTokens(folders.length), icon: LayoutGrid },
           { label: "Video dirender", value: formatTokens(stats.videos), icon: Film },
           { label: "Gambar dibuat", value: formatTokens(stats.images), icon: ImageIcon },
           { label: "Token terpakai", value: formatTokens(stats.tokens), icon: Clock3 },
@@ -265,97 +287,91 @@ export function ProjectsView() {
         </div>
       ) : view === "grid" ? (
         <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {filtered.map((folder) => {
-            const items = generations.filter((item) => item.folderId === folder.id);
-            const videos = items.filter((item) => item.mediaType === "VIDEO").length;
-            const images = items.filter((item) => item.mediaType === "IMAGE").length;
-            const tokens = items.reduce((total, item) => total + item.tokensCharged, 0);
-            return (
-              <article
-                key={folder.id}
-                className="group relative rounded-[1.75rem] border border-border bg-white p-3 shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-lift"
+          {filtered.map((folder) => (
+            <article
+              key={folder.id}
+              className="group relative rounded-[1.75rem] border border-border bg-white p-3 shadow-card transition-all duration-300 hover:-translate-y-1 hover:shadow-lift"
+            >
+              <button
+                type="button"
+                onClick={() => router.push(`/app/projects/${folder.id}`)}
+                className="block w-full text-left"
+                aria-label={`Buka folder ${folder.name}`}
               >
+                <FolderCollage variants={folderArt(folder.id)} />
+                <div className="px-2 pb-1 pt-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <h2 className="text-base font-semibold tracking-[-0.02em] text-ink">
+                      {folder.name}
+                    </h2>
+                    <ArrowUpRight
+                      className="mt-0.5 size-4 shrink-0 text-muted/50 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-ink"
+                      aria-hidden
+                    />
+                  </div>
+                  <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted">
+                    {folder.description || "Belum ada deskripsi."}
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-muted">
+                    <span className="rounded-full bg-canvas-2 px-2 py-0.5">
+                      {folder.videoCount} video
+                    </span>
+                    <span className="rounded-full bg-canvas-2 px-2 py-0.5">
+                      {folder.imageCount} gambar
+                    </span>
+                    <span className="rounded-full bg-accent-soft px-2 py-0.5 text-accent-strong">
+                      {formatTokens(folder.tokensUsed)} token
+                    </span>
+                  </div>
+                  <p className="mt-3 text-[10px] text-muted/70">
+                    Diperbarui {formatRelative(folder.updatedAt)}
+                  </p>
+                </div>
+              </button>
+
+              <div className="absolute right-4 top-4">
                 <button
                   type="button"
-                  onClick={() => router.push(`/app/projects/${folder.id}`)}
-                  className="block w-full text-left"
-                  aria-label={`Buka folder ${folder.name}`}
+                  onClick={() => setMenuOpenId(menuOpenId === folder.id ? null : folder.id)}
+                  aria-label={`Menu folder ${folder.name}`}
+                  className="flex size-8 items-center justify-center rounded-full border border-white/40 bg-white/80 text-ink shadow-sm backdrop-blur transition-colors hover:bg-white"
                 >
-                  <FolderCollage variants={folderArt(folder.id, generations)} />
-                  <div className="px-2 pb-1 pt-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <h2 className="text-base font-semibold tracking-[-0.02em] text-ink">
-                        {folder.name}
-                      </h2>
-                      <ArrowUpRight
-                        className="mt-0.5 size-4 shrink-0 text-muted/50 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-ink"
-                        aria-hidden
-                      />
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted">
-                      {folder.description || "Belum ada deskripsi."}
-                    </p>
-                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-muted">
-                      <span className="rounded-full bg-canvas-2 px-2 py-0.5">
-                        {videos} video
-                      </span>
-                      <span className="rounded-full bg-canvas-2 px-2 py-0.5">
-                        {images} gambar
-                      </span>
-                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-accent-strong">
-                        {formatTokens(tokens)} token
-                      </span>
-                    </div>
-                    <p className="mt-3 text-[10px] text-muted/70">
-                      Diperbarui {formatRelative(folder.updatedAt)}
-                    </p>
-                  </div>
+                  <MoreHorizontal className="size-4" aria-hidden />
                 </button>
-
-                <div className="absolute right-4 top-4">
-                  <button
-                    type="button"
-                    onClick={() => setMenuOpenId(menuOpenId === folder.id ? null : folder.id)}
-                    aria-label={`Menu folder ${folder.name}`}
-                    className="flex size-8 items-center justify-center rounded-full border border-white/40 bg-white/80 text-ink shadow-sm backdrop-blur transition-colors hover:bg-white"
-                  >
-                    <MoreHorizontal className="size-4" aria-hidden />
-                  </button>
-                  {menuOpenId === folder.id ? (
-                    <div className="absolute right-0 top-9 z-20 w-40 overflow-hidden rounded-xl border border-border bg-white py-1 shadow-lift">
-                      <button
-                        type="button"
-                        onClick={() => router.push(`/app/projects/${folder.id}`)}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-ink hover:bg-canvas-2"
-                      >
-                        <ArrowUpRight className="size-3.5" aria-hidden />
-                        Buka
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => openRename(folder)}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-ink hover:bg-canvas-2"
-                      >
-                        <Pencil className="size-3.5" aria-hidden />
-                        Rename
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDeleteTarget(folder);
-                          setMenuOpenId(null);
-                        }}
-                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-danger hover:bg-danger/5"
-                      >
-                        <Trash2 className="size-3.5" aria-hidden />
-                        Hapus
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-              </article>
-            );
-          })}
+                {menuOpenId === folder.id ? (
+                  <div className="absolute right-0 top-9 z-20 w-40 overflow-hidden rounded-xl border border-border bg-white py-1 shadow-lift">
+                    <button
+                      type="button"
+                      onClick={() => router.push(`/app/projects/${folder.id}`)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-ink hover:bg-canvas-2"
+                    >
+                      <ArrowUpRight className="size-3.5" aria-hidden />
+                      Buka
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openRename(folder)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-ink hover:bg-canvas-2"
+                    >
+                      <Pencil className="size-3.5" aria-hidden />
+                      Rename
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteTarget(folder);
+                        setMenuOpenId(null);
+                      }}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-danger hover:bg-danger/5"
+                    >
+                      <Trash2 className="size-3.5" aria-hidden />
+                      Hapus
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </article>
+          ))}
 
           <button
             type="button"
@@ -378,57 +394,51 @@ export function ProjectsView() {
             <span>Diperbarui</span>
             <span />
           </div>
-          {filtered.map((folder) => {
-            const items = generations.filter((item) => item.folderId === folder.id);
-            const videos = items.filter((item) => item.mediaType === "VIDEO").length;
-            const images = items.filter((item) => item.mediaType === "IMAGE").length;
-            const tokens = items.reduce((total, item) => total + item.tokensCharged, 0);
-            return (
-              <div
-                key={folder.id}
-                className="grid gap-3 border-b border-border/60 px-5 py-4 last:border-b-0 sm:grid-cols-[1.6fr_0.7fr_0.7fr_0.7fr_auto] sm:items-center"
+          {filtered.map((folder) => (
+            <div
+              key={folder.id}
+              className="grid gap-3 border-b border-border/60 px-5 py-4 last:border-b-0 sm:grid-cols-[1.6fr_0.7fr_0.7fr_0.7fr_auto] sm:items-center"
+            >
+              <button
+                type="button"
+                onClick={() => router.push(`/app/projects/${folder.id}`)}
+                className="flex items-center gap-3 text-left"
               >
+                <GradientArt
+                  variant={folderArt(folder.id)[0] ?? "sunset"}
+                  className="size-11 shrink-0"
+                  rounded="rounded-xl"
+                />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-ink">{folder.name}</p>
+                  <p className="truncate text-[11px] text-muted">{folder.description}</p>
+                </div>
+              </button>
+              <p className="text-xs text-muted">
+                {folder.videoCount} video · {folder.imageCount} gambar
+              </p>
+              <p className="text-xs text-muted">{formatTokens(folder.tokensUsed)} token</p>
+              <p className="text-xs text-muted">{formatRelative(folder.updatedAt)}</p>
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => router.push(`/app/projects/${folder.id}`)}
-                  className="flex items-center gap-3 text-left"
+                  onClick={() => openRename(folder)}
+                  aria-label={`Rename ${folder.name}`}
+                  className="flex size-8 items-center justify-center rounded-full text-muted hover:bg-canvas-2 hover:text-ink"
                 >
-                  <GradientArt
-                    variant={folderArt(folder.id, generations)[0] ?? "sunset"}
-                    className="size-11 shrink-0"
-                    rounded="rounded-xl"
-                  />
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-ink">{folder.name}</p>
-                    <p className="truncate text-[11px] text-muted">{folder.description}</p>
-                  </div>
+                  <Pencil className="size-3.5" aria-hidden />
                 </button>
-                <p className="text-xs text-muted">
-                  {videos} video · {images} gambar
-                </p>
-                <p className="text-xs text-muted">{formatTokens(tokens)} token</p>
-                <p className="text-xs text-muted">{formatRelative(folder.updatedAt)}</p>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => openRename(folder)}
-                    aria-label={`Rename ${folder.name}`}
-                    className="flex size-8 items-center justify-center rounded-full text-muted hover:bg-canvas-2 hover:text-ink"
-                  >
-                    <Pencil className="size-3.5" aria-hidden />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteTarget(folder)}
-                    aria-label={`Hapus ${folder.name}`}
-                    className="flex size-8 items-center justify-center rounded-full text-muted hover:bg-danger/5 hover:text-danger"
-                  >
-                    <Trash2 className="size-3.5" aria-hidden />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(folder)}
+                  aria-label={`Hapus ${folder.name}`}
+                  className="flex size-8 items-center justify-center rounded-full text-muted hover:bg-danger/5 hover:text-danger"
+                >
+                  <Trash2 className="size-3.5" aria-hidden />
+                </button>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       )}
 
@@ -442,7 +452,7 @@ export function ProjectsView() {
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>
               Batal
             </Button>
-            <Button variant="primary" onClick={handleCreate}>
+            <Button variant="primary" loading={createFolder.isPending} onClick={handleCreate}>
               Buat folder
             </Button>
           </>
@@ -479,7 +489,7 @@ export function ProjectsView() {
             <Button variant="ghost" onClick={() => setRenameTarget(null)}>
               Batal
             </Button>
-            <Button variant="primary" onClick={handleRename}>
+            <Button variant="primary" loading={renameFolder.isPending} onClick={handleRename}>
               Simpan
             </Button>
           </>
@@ -514,7 +524,7 @@ export function ProjectsView() {
             <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
               Batal
             </Button>
-            <Button variant="danger" onClick={handleDelete}>
+            <Button variant="danger" loading={deleteFolder.isPending} onClick={handleDelete}>
               Hapus folder
             </Button>
           </>

@@ -23,6 +23,7 @@ export interface GeneratorPanelProps {
   referenceFile: ReferenceFile | null;
   onReferenceChange: (file: ReferenceFile | null) => void;
   balance: number;
+  tokenValueRupiah: number;
   onError: (message: string) => void;
   disabled?: boolean;
 }
@@ -42,6 +43,7 @@ export function GeneratorPanel({
   referenceFile,
   onReferenceChange,
   balance,
+  tokenValueRupiah,
   onError,
   disabled = false,
 }: GeneratorPanelProps) {
@@ -188,7 +190,7 @@ export function GeneratorPanel({
               {formatTokens(cost)}
             </p>
             <p className="text-[10px] text-muted">
-              token · {formatRupiahFromTokens(cost)}
+              token · {formatRupiahFromTokens(cost, tokenValueRupiah)}
             </p>
           </div>
           <div className="text-right text-[11px] text-muted">

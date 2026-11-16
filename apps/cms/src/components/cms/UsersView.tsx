@@ -1,35 +1,50 @@
 "use client";
 
-import { ArrowRight, Building2, Search, ShieldCheck, ShieldOff, UserPlus, Users } from "lucide-react";
+import { ArrowRight, Building2, Check, Copy, Search, ShieldCheck, ShieldOff, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
+import {
+  useAdminAccountsQuery,
+  useAdminWorkspacesQuery,
+  useCreateAccountMutation,
+  useUpdateAccountMutation,
+} from "@rupakarsa/shared/hooks/use-admin";
 import { formatDate, formatTokens, formatWorkspaceRole } from "@rupakarsa/shared/lib/format";
 import type { Role, User } from "@rupakarsa/shared/lib/types";
-import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
-import { useWorkspaceStore } from "@rupakarsa/shared/stores/workspace-store";
 import { Button, Dialog, Field, Select, TextInput } from "@rupakarsa/shared/ui";
 
+interface CreatedAccount {
+  fullName: string;
+  email: string;
+  temporaryPassword: string;
+}
+
 export function UsersView() {
-  const accounts = useAdminStore((state) => state.accounts);
-  const adminHydrated = useAdminStore((state) => state.hydrated);
-  const createAccount = useAdminStore((state) => state.createAccount);
-  const toggleAccount = useAdminStore((state) => state.toggleAccount);
-  const setCmsAccess = useAdminStore((state) => state.setCmsAccess);
-  const workspaces = useWorkspaceStore((state) => state.workspaces);
-  const memberships = useWorkspaceStore((state) => state.memberships);
-  const workspaceHydrated = useWorkspaceStore((state) => state.hydrated);
+  const accountsQuery = useAdminAccountsQuery();
+  const workspacesQuery = useAdminWorkspacesQuery();
+  const createAccount = useCreateAccountMutation();
+  const updateAccount = useUpdateAccountMutation();
   const pushToast = useUiStore((state) => state.pushToast);
 
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [accessTarget, setAccessTarget] = useState<User | null>(null);
+  const [createdAccount, setCreatedAccount] = useState<CreatedAccount | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("USER");
   const [grantCms, setGrantCms] = useState(false);
+
+  const accounts = useMemo(() => accountsQuery.data ?? [], [accountsQuery.data]);
+  const workspaces = useMemo(() => workspacesQuery.data?.workspaces ?? [], [workspacesQuery.data]);
+  const memberships = useMemo(
+    () => workspacesQuery.data?.memberships ?? [],
+    [workspacesQuery.data],
+  );
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
@@ -76,34 +91,72 @@ export function UsersView() {
   }
 
   function handleCreate(): void {
-    const created = createAccount({
-      fullName,
-      email,
-      role,
-      cmsAccess: role === "SUPERADMIN" ? true : grantCms,
-    });
-    if (!created.ok) {
-      pushToast("error", created.message);
+    if (fullName.trim().length < 2) {
+      pushToast("error", "Nama akun minimal 2 karakter.");
       return;
     }
-    setCreateOpen(false);
-    pushToast("success", "Akun dan workspace personal dibuat.");
+    createAccount.mutate(
+      {
+        fullName: fullName.trim(),
+        email: email.trim(),
+        role,
+        cmsAccess: role === "SUPERADMIN" ? true : grantCms,
+      },
+      {
+        onSuccess: (result) => {
+          setCreateOpen(false);
+          setCreatedAccount({
+            fullName: result.account.fullName,
+            email: result.account.email,
+            temporaryPassword: result.temporaryPassword,
+          });
+          pushToast("success", "Akun dan workspace personal dibuat.");
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
   function confirmAccess(): void {
     if (!accessTarget) return;
     const next = !accessTarget.cmsAccess;
-    setCmsAccess(accessTarget.id, next);
-    setAccessTarget(null);
-    pushToast(
-      "success",
-      next
-        ? `Akses CMS untuk ${accessTarget.fullName} diaktifkan.`
-        : `Akses CMS ${accessTarget.fullName} dicabut.`,
+    updateAccount.mutate(
+      { accountId: accessTarget.id, cmsAccess: next },
+      {
+        onSuccess: () => {
+          pushToast(
+            "success",
+            next
+              ? `Akses CMS untuk ${accessTarget.fullName} diaktifkan.`
+              : `Akses CMS ${accessTarget.fullName} dicabut.`,
+          );
+          setAccessTarget(null);
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
     );
   }
 
-  if (!adminHydrated || !workspaceHydrated) {
+  function toggleActive(account: User): void {
+    updateAccount.mutate(
+      { accountId: account.id, isActive: !account.isActive },
+      {
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
+  }
+
+  async function copyPassword(): Promise<void> {
+    if (!createdAccount) return;
+    try {
+      await navigator.clipboard.writeText(createdAccount.temporaryPassword);
+      setCopied(true);
+    } catch {
+      pushToast("error", "Gagal menyalin. Salin password secara manual.");
+    }
+  }
+
+  if (accountsQuery.isPending || workspacesQuery.isPending) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -287,7 +340,7 @@ export function UsersView() {
 
               <button
                 type="button"
-                onClick={() => toggleAccount(account.id)}
+                onClick={() => toggleActive(account)}
                 aria-pressed={account.isActive}
                 className={`relative h-6 w-11 rounded-full transition-colors ${
                   account.isActive ? "bg-success" : "bg-ink/15"
@@ -323,7 +376,7 @@ export function UsersView() {
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>
               Batal
             </Button>
-            <Button variant="primary" onClick={handleCreate}>
+            <Button variant="primary" loading={createAccount.isPending} onClick={handleCreate}>
               Daftarkan
             </Button>
           </>
@@ -382,10 +435,6 @@ export function UsersView() {
               </span>
             </span>
           </label>
-          <p className="rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-[11px] leading-relaxed text-muted">
-            Password sementara: <span className="font-mono text-ink">rupakarsa</span>. Minta user
-            menggantinya setelah integrasi auth backend.
-          </p>
         </div>
       </Dialog>
 
@@ -403,7 +452,11 @@ export function UsersView() {
             <Button variant="ghost" onClick={() => setAccessTarget(null)}>
               Batal
             </Button>
-            <Button variant={accessTarget?.cmsAccess ? "danger" : "primary"} onClick={confirmAccess}>
+            <Button
+              variant={accessTarget?.cmsAccess ? "danger" : "primary"}
+              loading={updateAccount.isPending}
+              onClick={confirmAccess}
+            >
               {accessTarget?.cmsAccess ? "Cabut akses" : "Beri akses"}
             </Button>
           </>
@@ -413,6 +466,60 @@ export function UsersView() {
           <span className="font-medium text-ink">{accessTarget?.fullName}</span> ·{" "}
           {accessTarget?.email}
         </p>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(createdAccount)}
+        title="Akun berhasil dibuat"
+        description="Salin password sementara ini sekarang. Password tidak ditampilkan lagi setelah dialog ditutup."
+        onClose={() => {
+          setCreatedAccount(null);
+          setCopied(false);
+        }}
+        footer={
+          <Button
+            variant="primary"
+            onClick={() => {
+              setCreatedAccount(null);
+              setCopied(false);
+            }}
+          >
+            Selesai
+          </Button>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <div className="rounded-xl border border-border bg-surface-2/60 px-3.5 py-3">
+            <p className="text-xs font-medium text-ink">{createdAccount?.fullName}</p>
+            <p className="text-[11px] text-muted">{createdAccount?.email}</p>
+          </div>
+          <div>
+            <p className="mono-label text-muted">Password sementara</p>
+            <div className="mt-1.5 flex items-center gap-2">
+              <code className="min-w-0 flex-1 truncate rounded-xl border border-border bg-white px-3 py-2 font-mono text-sm text-ink">
+                {createdAccount?.temporaryPassword}
+              </code>
+              <Button
+                size="sm"
+                variant="secondary"
+                icon={
+                  copied ? (
+                    <Check className="size-3.5" aria-hidden />
+                  ) : (
+                    <Copy className="size-3.5" aria-hidden />
+                  )
+                }
+                onClick={() => void copyPassword()}
+              >
+                {copied ? "Tersalin" : "Salin"}
+              </Button>
+            </div>
+          </div>
+          <p className="rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-[11px] leading-relaxed text-muted">
+            Minta user masuk ke Creator lalu mengganti password lewat tombol Ubah password di
+            sidebar.
+          </p>
+        </div>
       </Dialog>
     </div>
   );

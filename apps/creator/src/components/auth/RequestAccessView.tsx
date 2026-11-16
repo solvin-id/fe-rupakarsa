@@ -10,25 +10,18 @@ import {
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Logo } from "@rupakarsa/shared/brand";
-import {
-  normalizeWhatsAppNumber,
-  whatsappLink,
-} from "@rupakarsa/shared/lib/contact-settings-cookie";
-import { useContactStore } from "@rupakarsa/shared/stores/contact-store";
+import { usePublicConfigQuery } from "@rupakarsa/shared/hooks/use-session";
+import { normalizeWhatsAppNumber, whatsappLink } from "@rupakarsa/shared/lib/whatsapp";
+import type { AdminContact } from "@rupakarsa/shared/lib/types";
 import { Button, Field, TextArea, TextInput } from "@rupakarsa/shared/ui";
 
 export function RequestAccessView() {
-  const hydrated = useContactStore((state) => state.hydrated);
-  const hydrate = useContactStore((state) => state.hydrate);
+  const configQuery = usePublicConfigQuery();
 
-  useEffect(() => {
-    hydrate();
-  }, [hydrate]);
-
-  if (!hydrated) {
+  if (configQuery.isPending) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-canvas">
         <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -36,11 +29,20 @@ export function RequestAccessView() {
     );
   }
 
-  return <RequestForm />;
+  return (
+    <RequestForm
+      contact={
+        configQuery.data?.contact ?? {
+          name: "Tim Rupakarsa",
+          whatsapp: "",
+          email: "halo@rupakarsa.id",
+        }
+      }
+    />
+  );
 }
 
-function RequestForm() {
-  const contact = useContactStore((state) => state.contact);
+function RequestForm({ contact }: { contact: AdminContact }) {
 
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");

@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
 const sharedSrc = fileURLToPath(new URL("./packages/shared/src", import.meta.url));
+const creatorSrc = `${fileURLToPath(new URL("./apps/creator/src", import.meta.url))}/`;
 
 export default defineConfig({
   plugins: [react()],
@@ -22,6 +23,7 @@ export default defineConfig({
         ),
       },
       { find: "@rupakarsa/shared", replacement: sharedSrc },
+      { find: /^@\//, replacement: creatorSrc },
     ],
   },
   test: {

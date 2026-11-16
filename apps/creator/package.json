@@ -2,7 +2,7 @@
   "name": "@rupakarsa/creator",
   "version": "0.1.0",
   "private": true,
-  "description": "Rupakarsa Creator — user workspace for AI image & video production",
+  "description": "Rupakarsa Creator \u2014 user workspace for AI image & video production",
   "scripts": {
     "dev": "next dev -p 3000",
     "build": "next build",
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@rupakarsa/shared": "*",
+    "@tanstack/react-query": "^5.62.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.70.0",
     "next": "^16.4.5",

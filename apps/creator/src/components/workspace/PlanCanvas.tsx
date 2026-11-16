@@ -32,12 +32,14 @@ export interface PlanCanvasProps {
   resolution: string;
   aspectRatio: string;
   balance: number;
+  tokenValueRupiah: number;
   onGenerate: () => void;
   generating: boolean;
   simulateFailure: boolean;
   onSimulateFailureChange: (value: boolean) => void;
   canGenerate: boolean;
   activeStatus: GenerationStatus | null;
+  showSimulation: boolean;
 }
 
 const STATUS_LABEL: Record<GenerationStatus, string> = {
@@ -64,12 +66,14 @@ export function PlanCanvas({
   resolution,
   aspectRatio,
   balance,
+  tokenValueRupiah,
   onGenerate,
   generating,
   simulateFailure,
   onSimulateFailureChange,
   canGenerate,
   activeStatus,
+  showSimulation,
 }: PlanCanvasProps) {
   const cost = model?.tokenCost ?? 0;
   const projected = Math.max(0, balance - cost);
@@ -212,7 +216,7 @@ export function PlanCanvas({
                 {formatTokens(cost)}
               </p>
               <p className="text-[10px] text-canvas/50">
-                token · {formatRupiahFromTokens(cost)}
+                token · {formatRupiahFromTokens(cost, tokenValueRupiah)}
               </p>
             </div>
             <div className="text-right text-[11px] text-canvas/60">
@@ -266,15 +270,17 @@ export function PlanCanvas({
             Generate konten
           </Button>
 
-          <label className="mt-3 flex items-center justify-center gap-2 text-[10px] text-canvas/50">
-            <input
-              type="checkbox"
-              checked={simulateFailure}
-              onChange={(event) => onSimulateFailureChange(event.target.checked)}
-              className="size-3 accent-[#f04e23]"
-            />
-            Simulasikan gagal untuk menguji auto-refund
-          </label>
+          {showSimulation ? (
+            <label className="mt-3 flex items-center justify-center gap-2 text-[10px] text-canvas/50">
+              <input
+                type="checkbox"
+                checked={simulateFailure}
+                onChange={(event) => onSimulateFailureChange(event.target.checked)}
+                className="size-3 accent-[#f04e23]"
+              />
+              Simulasikan gagal untuk menguji auto-refund
+            </label>
+          ) : null}
         </div>
       </div>
     </section>

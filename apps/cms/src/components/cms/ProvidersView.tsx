@@ -12,28 +12,27 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import {
+  useAdminProvidersQuery,
+  useCreateProviderMutation,
+  useTestProviderMutation,
+  useUpdateProviderMutation,
+} from "@rupakarsa/shared/hooks/use-admin";
 import { formatDateTime } from "@rupakarsa/shared/lib/format";
 import type { AiProvider } from "@rupakarsa/shared/lib/types";
-import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 import { Button, Dialog, Field, TextInput } from "@rupakarsa/shared/ui";
 
-function maskKey(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed.length <= 8) return "••••••••";
-  return `${trimmed.slice(0, 3)}••••••••${trimmed.slice(-4)}`;
-}
-
 export function ProvidersView() {
-  const providers = useAdminStore((state) => state.providers);
-  const updateProvider = useAdminStore((state) => state.updateProvider);
-  const toggleProvider = useAdminStore((state) => state.toggleProvider);
-  const createProvider = useAdminStore((state) => state.createProvider);
+  const providersQuery = useAdminProvidersQuery();
+  const createProvider = useCreateProviderMutation();
+  const updateProvider = useUpdateProviderMutation();
+  const testProvider = useTestProviderMutation();
   const pushToast = useUiStore((state) => state.pushToast);
 
   const [editing, setEditing] = useState<AiProvider | null>(null);
   const [draftKey, setDraftKey] = useState("");
-  const [testingCode, setTestingCode] = useState<string | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [draftName, setDraftName] = useState("");
@@ -42,6 +41,8 @@ export function ProvidersView() {
   const [draftNewKey, setDraftNewKey] = useState("");
   const [draftActive, setDraftActive] = useState(true);
 
+  const providers = providersQuery.data ?? [];
+
   function openEdit(provider: AiProvider): void {
     setEditing(provider);
     setDraftKey("");
@@ -49,21 +50,41 @@ export function ProvidersView() {
 
   function handleSave(): void {
     if (!editing) return;
-    if (draftKey.trim().length < 6) {
+    const apiKey = draftKey.trim();
+    if (apiKey.length > 0 && apiKey.length < 6) {
       pushToast("error", "API key minimal 6 karakter.");
       return;
     }
-    updateProvider(editing.code, { apiKeyMasked: maskKey(draftKey) });
-    setEditing(null);
-    pushToast("success", `API key ${editing.name} diperbarui.`);
+    updateProvider.mutate(
+      { providerId: editing.id, apiKey: apiKey.length > 0 ? apiKey : undefined },
+      {
+        onSuccess: () => {
+          setEditing(null);
+          pushToast("success", `API key ${editing.name} diperbarui.`);
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
   function handleTest(provider: AiProvider): void {
-    setTestingCode(provider.code);
-    window.setTimeout(() => {
-      setTestingCode(null);
-      pushToast("success", `Koneksi ${provider.name} berhasil (simulasi).`);
-    }, 900);
+    setTestingId(provider.id);
+    testProvider.mutate(provider.id, {
+      onSuccess: (result) => {
+        pushToast(result.ok ? "success" : "error", result.message);
+      },
+      onError: (error) => pushToast("error", error.message),
+      onSettled: () => setTestingId(null),
+    });
+  }
+
+  function handleToggle(provider: AiProvider): void {
+    updateProvider.mutate(
+      { providerId: provider.id, isActive: !provider.isActive },
+      {
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
   function openCreate(): void {
@@ -95,19 +116,30 @@ export function ProvidersView() {
       return;
     }
 
-    const provider = createProvider({
-      name: draftName,
-      code: draftCode,
-      baseUrl: draftBaseUrl,
-      apiKeyMasked: maskKey(draftNewKey),
-      isActive: draftActive,
-    });
-    if (!provider) {
-      pushToast("error", "Kode provider sudah dipakai.");
-      return;
-    }
-    setCreateOpen(false);
-    pushToast("success", `Provider ${provider.name} ditambahkan.`);
+    createProvider.mutate(
+      {
+        name: draftName.trim(),
+        code: draftCode.trim(),
+        baseUrl: draftBaseUrl.trim(),
+        apiKey: draftNewKey.trim(),
+        isActive: draftActive,
+      },
+      {
+        onSuccess: (provider) => {
+          setCreateOpen(false);
+          pushToast("success", `Provider ${provider.name} ditambahkan.`);
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
+  }
+
+  if (providersQuery.isPending) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
   }
 
   return (
@@ -135,8 +167,7 @@ export function ProvidersView() {
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-strong" aria-hidden />
           <p className="text-xs leading-relaxed text-ink/70">
             <span className="font-medium text-ink">Key provider hanya dikelola lewat CMS.</span>{" "}
-            Di demo FE ini nilai disamarkan dan disimpan lokal; enkripsi server menyusul di tahap
-            backend.
+            Server menyimpan key terenkripsi AES-256-GCM dan hanya mengirim nilai tersamarkan.
           </p>
         </div>
         <span className="mono-label shrink-0 text-[9px] text-accent-strong">Encrypted at rest</span>
@@ -159,7 +190,7 @@ export function ProvidersView() {
               </div>
               <button
                 type="button"
-                onClick={() => toggleProvider(provider.code)}
+                onClick={() => handleToggle(provider)}
                 aria-pressed={provider.isActive}
                 className={`relative h-6 w-11 rounded-full transition-colors ${
                   provider.isActive ? "bg-success" : "bg-ink/15"
@@ -181,7 +212,9 @@ export function ProvidersView() {
               </div>
               <div>
                 <p className="mono-label text-[8px] text-muted">API key</p>
-                <p className="mt-0.5 font-mono text-[11px] text-ink">{provider.apiKeyMasked}</p>
+                <p className="mt-0.5 font-mono text-[11px] text-ink">
+                  {provider.apiKeyMasked || "Belum diatur"}
+                </p>
               </div>
               <div className="flex items-center justify-between text-[10px] text-muted">
                 <span>Diperbarui {formatDateTime(provider.updatedAt)}</span>
@@ -204,9 +237,9 @@ export function ProvidersView() {
               <Button
                 variant="secondary"
                 size="sm"
-                loading={testingCode === provider.code}
+                loading={testingId === provider.id}
                 icon={
-                  testingCode === provider.code ? (
+                  testingId === provider.id ? (
                     <Loader2 className="size-3.5 animate-spin" aria-hidden />
                   ) : (
                     <RefreshCw className="size-3.5" aria-hidden />
@@ -249,14 +282,14 @@ export function ProvidersView() {
       <Dialog
         open={Boolean(editing)}
         title={`Edit API key ${editing?.name ?? ""}`}
-        description="Tempel key baru. Nilai lama akan diganti dan disamarkan di daftar."
+        description="Tempel key baru. Biarkan kosong untuk mempertahankan key yang tersimpan."
         onClose={() => setEditing(null)}
         footer={
           <>
             <Button variant="ghost" onClick={() => setEditing(null)}>
               Batal
             </Button>
-            <Button variant="primary" onClick={handleSave}>
+            <Button variant="primary" loading={updateProvider.isPending} onClick={handleSave}>
               Simpan key
             </Button>
           </>
@@ -275,7 +308,8 @@ export function ProvidersView() {
             />
           </Field>
           <p className="rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-[11px] leading-relaxed text-muted">
-            Key saat ini: <span className="font-mono text-ink">{editing?.apiKeyMasked}</span>
+            Key saat ini:{" "}
+            <span className="font-mono text-ink">{editing?.apiKeyMasked || "Belum diatur"}</span>
           </p>
         </div>
       </Dialog>
@@ -290,7 +324,7 @@ export function ProvidersView() {
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>
               Batal
             </Button>
-            <Button variant="primary" onClick={handleCreate}>
+            <Button variant="primary" loading={createProvider.isPending} onClick={handleCreate}>
               Tambah provider
             </Button>
           </>

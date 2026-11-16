@@ -2,7 +2,7 @@
   "name": "@rupakarsa/cms",
   "version": "0.1.0",
   "private": true,
-  "description": "Rupakarsa CMS — admin console for tenants, providers, models, and access",
+  "description": "Rupakarsa CMS \u2014 admin console for tenants, providers, models, and access",
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@rupakarsa/shared": "*",
+    "@tanstack/react-query": "^5.62.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.70.0",
     "next": "^16.4.5",

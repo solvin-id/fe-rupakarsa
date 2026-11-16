@@ -6,16 +6,14 @@ import {
   Eye,
   EyeOff,
   LayoutGrid,
-  LockKeyhole,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Logo } from "../brand";
 import { hasCmsAccess } from "../../lib/auth";
-import { DEMO_ACCOUNTS, DEMO_PASSWORD } from "../../lib/seed";
-import { useSessionStore } from "../../stores/session-store";
+import { useLoginMutation, useLogoutMutation, useSessionQuery } from "../../hooks/use-session";
 import { Button, Field, TextInput } from "../ui";
 
 export interface UnifiedLoginProps {
@@ -23,30 +21,25 @@ export interface UnifiedLoginProps {
   requestAccessUrl?: string;
 }
 
-const DEMO_DEMO = DEMO_ACCOUNTS.find((account) => account.userId === "usr_demo");
-const DEMO_ADMIN = DEMO_ACCOUNTS.find((account) => account.userId === "usr_admin");
-const DEMO_NADIA = DEMO_ACCOUNTS.find((account) => account.userId === "usr_nadia");
+const PRICING_HIGHLIGHTS = [
+  { value: "4.000", label: "token per paket" },
+  { value: "250×", label: "plan gratis" },
+  { value: "Rp 2 jt", label: "paket awal" },
+];
 
 export function UnifiedLogin({
   creatorUrl,
   requestAccessUrl = "mailto:halo@rupakarsa.id",
 }: UnifiedLoginProps) {
-  const session = useSessionStore((state) => state.session);
-  const hydrated = useSessionStore((state) => state.hydrated);
-  const hydrate = useSessionStore((state) => state.hydrate);
-  const refreshAccess = useSessionStore((state) => state.refreshAccess);
-  const signIn = useSessionStore((state) => state.signIn);
-  const signOut = useSessionStore((state) => state.signOut);
-  const errorMessage = useSessionStore((state) => state.errorMessage);
+  const sessionQuery = useSessionQuery();
+  const loginMutation = useLoginMutation();
+  const logoutMutation = useLogoutMutation();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    hydrate();
-    refreshAccess();
-  }, [hydrate, refreshAccess]);
+  const session = sessionQuery.data ?? null;
 
   function goToCreator(): void {
     window.location.assign(`${creatorUrl}/app/projects`);
@@ -54,17 +47,14 @@ export function UnifiedLogin({
 
   function handleSubmit(event: React.FormEvent): void {
     event.preventDefault();
-    const ok = signIn(email, password);
-    if (ok) goToCreator();
-  }
-
-  function fillDemo(account: typeof DEMO_DEMO): void {
-    if (!account) return;
-    setEmail(account.email);
-    setPassword(DEMO_PASSWORD);
+    loginMutation.mutate(
+      { email: email.trim(), password },
+      { onSuccess: goToCreator },
+    );
   }
 
   const canUseCms = session ? hasCmsAccess(session.user) : false;
+  const errorMessage = loginMutation.error?.message ?? null;
 
   return (
     <main className="grid min-h-screen lg:grid-cols-[1.05fr_0.95fr]">
@@ -98,11 +88,7 @@ export function UnifiedLogin({
           </p>
 
           <div className="mt-8 grid grid-cols-3 gap-3">
-            {[
-              { value: "4.000", label: "saldo workspace" },
-              { value: "250×", label: "plan gratis" },
-              { value: "1", label: "workspace" },
-            ].map((item) => (
+            {PRICING_HIGHLIGHTS.map((item) => (
               <div key={item.label} className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
                 <p className="text-xl font-semibold tracking-[-0.03em] text-canvas">{item.value}</p>
                 <p className="mt-0.5 text-[10px] text-canvas/50">{item.label}</p>
@@ -181,7 +167,12 @@ export function UnifiedLogin({
                 >
                   Lanjut ke Creator
                 </Button>
-                <Button variant="ghost" className="w-full" onClick={signOut}>
+                <Button
+                  variant="ghost"
+                  className="w-full"
+                  loading={logoutMutation.isPending}
+                  onClick={() => logoutMutation.mutate()}
+                >
                   Keluar dari akun
                 </Button>
               </div>
@@ -246,53 +237,16 @@ export function UnifiedLogin({
                 variant="primary"
                 size="lg"
                 className="mt-5 w-full"
+                loading={loginMutation.isPending}
                 icon={<ArrowRight className="size-4" aria-hidden />}
               >
                 Masuk ke Creator
               </Button>
 
-              <div className="mt-5 rounded-2xl border border-border bg-surface-2/70 p-3.5">
-                <p className="mono-label text-[9px] text-muted">Akun demo</p>
-                <div className="mt-2 grid gap-2 sm:grid-cols-3">
-                  <button
-                    type="button"
-                    onClick={() => fillDemo(DEMO_DEMO)}
-                    className="rounded-xl border border-border bg-white px-2.5 py-2 text-left transition-colors hover:border-ink/30"
-                  >
-                    <span className="block text-[11px] font-medium text-ink">Kreator</span>
-                    <span className="mt-0.5 block truncate font-mono text-[9px] text-muted">
-                      demo@rupakarsa.id
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => fillDemo(DEMO_NADIA)}
-                    className="rounded-xl border border-border bg-white px-2.5 py-2 text-left transition-colors hover:border-ink/30"
-                  >
-                    <span className="block text-[11px] font-medium text-ink">Nadia</span>
-                    <span className="mt-0.5 block truncate font-mono text-[9px] text-muted">
-                      nadia@alfateve.co.id
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => fillDemo(DEMO_ADMIN)}
-                    className="rounded-xl border border-border bg-white px-2.5 py-2 text-left transition-colors hover:border-ink/30"
-                  >
-                    <span className="block text-[11px] font-medium text-ink">Superadmin</span>
-                    <span className="mt-0.5 block truncate font-mono text-[9px] text-muted">
-                      admin@rupakarsa.id
-                    </span>
-                  </button>
-                </div>
-                <p className="mt-2 flex items-center gap-1.5 text-[10px] text-muted">
-                  <LockKeyhole className="size-3" aria-hidden />
-                  Password demo: <span className="font-mono text-ink">{DEMO_PASSWORD}</span>
-                </p>
-                <p className="mt-2 text-[10px] leading-relaxed text-muted">
-                  Admin: setelah masuk, buka CMS lewat surface switcher di sidebar workspace.
-                </p>
-              </div>
+              <p className="mt-4 rounded-xl border border-border bg-surface-2/60 px-3.5 py-2.5 text-[11px] leading-relaxed text-muted">
+                Akun dibuat oleh Superadmin Rupakarsa. Hubungi admin bila Anda belum memiliki
+                kredensial masuk.
+              </p>
             </form>
           )}
 

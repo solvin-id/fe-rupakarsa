@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Instrument_Sans, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 
+import { QueryProvider } from "@rupakarsa/shared/providers";
+
 import "./globals.css";
 
 const instrumentSans = Instrument_Sans({
@@ -48,7 +50,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="id"
       className={`${instrumentSans.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}
     >
-      <body className="min-h-screen bg-canvas font-sans text-ink antialiased">{children}</body>
+      <body className="min-h-screen bg-canvas font-sans text-ink antialiased">
+        <QueryProvider>{children}</QueryProvider>
+      </body>
     </html>
   );
 }

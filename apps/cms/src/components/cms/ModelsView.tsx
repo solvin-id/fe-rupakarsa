@@ -3,13 +3,15 @@
 import { Film, Image as ImageIcon, Pencil, Plus, Settings2, Sparkles } from "lucide-react";
 import { useState } from "react";
 
-import { formatTokens } from "@rupakarsa/shared/lib/format";
 import {
-  templatesForProvider,
-  type ModelTemplate,
-} from "@rupakarsa/shared/lib/model-catalog";
-import type { AiModel, MediaType } from "@rupakarsa/shared/lib/types";
-import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
+  useAdminModelTemplatesQuery,
+  useAdminModelsQuery,
+  useAdminProvidersQuery,
+  useCreateModelMutation,
+  useUpdateModelMutation,
+} from "@rupakarsa/shared/hooks/use-admin";
+import { formatTokens } from "@rupakarsa/shared/lib/format";
+import type { AiModel, MediaType, ModelTemplate } from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 import { Button, Dialog, Field, Select, TextInput } from "@rupakarsa/shared/ui";
 
@@ -30,11 +32,10 @@ function parseStrings(value: string): string[] {
 }
 
 export function ModelsView() {
-  const models = useAdminStore((state) => state.models);
-  const providers = useAdminStore((state) => state.providers);
-  const toggleModel = useAdminStore((state) => state.toggleModel);
-  const updateModel = useAdminStore((state) => state.updateModel);
-  const createModel = useAdminStore((state) => state.createModel);
+  const modelsQuery = useAdminModelsQuery();
+  const providersQuery = useAdminProvidersQuery();
+  const createModel = useCreateModelMutation();
+  const updateModel = useUpdateModelMutation();
   const pushToast = useUiStore((state) => state.pushToast);
 
   const [editing, setEditing] = useState<AiModel | null>(null);
@@ -55,12 +56,15 @@ export function ModelsView() {
   const [draftNewAspectRatios, setDraftNewAspectRatios] = useState("");
   const [draftActive, setDraftActive] = useState(true);
 
+  const models = modelsQuery.data ?? [];
+  const providers = providersQuery.data ?? [];
+  const selectedProvider = providers.find((provider) => provider.id === draftProviderId) ?? null;
+  const templatesQuery = useAdminModelTemplatesQuery(selectedProvider?.code ?? "");
+  const templates = templatesQuery.data ?? [];
+
   const activeCount = models.filter((model) => model.isActive).length;
   const videoCount = models.filter((model) => model.mediaType === "VIDEO").length;
   const imageCount = models.filter((model) => model.mediaType === "IMAGE").length;
-
-  const selectedProvider = providers.find((provider) => provider.id === draftProviderId) ?? null;
-  const templates = selectedProvider ? templatesForProvider(selectedProvider.code) : [];
 
   function providerName(providerId: string): string {
     return providers.find((provider) => provider.id === providerId)?.name ?? "—";
@@ -87,16 +91,24 @@ export function ModelsView() {
       pushToast("error", "Resolusi dan rasio aspek tidak boleh kosong.");
       return;
     }
-    updateModel(editing.id, {
-      tokenCost: Math.round(cost),
-      allowedParams: {
-        durations: editing.mediaType === "VIDEO" ? parseNumbers(draftDurations) : undefined,
-        resolutions,
-        aspectRatios,
+    updateModel.mutate(
+      {
+        modelId: editing.id,
+        tokenCost: Math.round(cost),
+        allowedParams: {
+          durations: editing.mediaType === "VIDEO" ? parseNumbers(draftDurations) : undefined,
+          resolutions,
+          aspectRatios,
+        },
       },
-    });
-    setEditing(null);
-    pushToast("success", `Tarif ${editing.displayName} diperbarui.`);
+      {
+        onSuccess: () => {
+          setEditing(null);
+          pushToast("success", `Tarif ${editing.displayName} diperbarui.`);
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
   function applyTemplate(template: ModelTemplate | null): void {
@@ -126,21 +138,18 @@ export function ModelsView() {
       pushToast("error", "Tambahkan provider terlebih dahulu.");
       return;
     }
-    const providerWithTemplates =
-      providers.find((provider) => templatesForProvider(provider.code).length > 0) ??
-      providers[0];
-    if (!providerWithTemplates) return;
+    const first = providers[0];
+    if (!first) return;
 
-    setDraftProviderId(providerWithTemplates.id);
-    applyTemplate(templatesForProvider(providerWithTemplates.code)[0] ?? null);
+    setDraftProviderId(first.id);
+    applyTemplate(null);
     setDraftActive(true);
     setCreateOpen(true);
   }
 
   function handleProviderChange(providerId: string): void {
     setDraftProviderId(providerId);
-    const provider = providers.find((item) => item.id === providerId);
-    applyTemplate(provider ? (templatesForProvider(provider.code)[0] ?? null) : null);
+    applyTemplate(null);
   }
 
   function handleTemplateChange(code: string): void {
@@ -181,21 +190,39 @@ export function ModelsView() {
       return;
     }
 
-    const model = createModel({
-      providerId: draftProviderId,
-      code: draftCode,
-      displayName: draftName,
-      mediaType: draftMediaType,
-      allowedParams: { durations, resolutions, aspectRatios },
-      tokenCost: Math.round(cost),
-      isActive: draftActive,
-    });
-    if (!model) {
-      pushToast("error", "Kode model sudah ada untuk provider ini.");
-      return;
-    }
-    setCreateOpen(false);
-    pushToast("success", `Model ${model.displayName} ditambahkan.`);
+    createModel.mutate(
+      {
+        providerId: draftProviderId,
+        code: draftCode.trim(),
+        displayName: draftName.trim(),
+        mediaType: draftMediaType,
+        allowedParams: { durations, resolutions, aspectRatios },
+        tokenCost: Math.round(cost),
+        isActive: draftActive,
+      },
+      {
+        onSuccess: (model) => {
+          setCreateOpen(false);
+          pushToast("success", `Model ${model.displayName} ditambahkan.`);
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
+  }
+
+  function handleToggle(model: AiModel): void {
+    updateModel.mutate(
+      { modelId: model.id, isActive: !model.isActive },
+      { onError: (error) => pushToast("error", error.message) },
+    );
+  }
+
+  if (modelsQuery.isPending || providersQuery.isPending) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
   }
 
   return (
@@ -295,7 +322,7 @@ export function ModelsView() {
             </div>
             <button
               type="button"
-              onClick={() => toggleModel(model.id)}
+              onClick={() => handleToggle(model)}
               aria-pressed={model.isActive}
               className={`relative h-6 w-11 rounded-full transition-colors ${
                 model.isActive ? "bg-success" : "bg-ink/15"
@@ -338,7 +365,7 @@ export function ModelsView() {
             <Button variant="ghost" onClick={() => setEditing(null)}>
               Batal
             </Button>
-            <Button variant="primary" onClick={handleSave}>
+            <Button variant="primary" loading={updateModel.isPending} onClick={handleSave}>
               Simpan perubahan
             </Button>
           </>
@@ -402,7 +429,7 @@ export function ModelsView() {
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>
               Batal
             </Button>
-            <Button variant="primary" onClick={handleCreate}>
+            <Button variant="primary" loading={createModel.isPending} onClick={handleCreate}>
               Tambah model
             </Button>
           </>
@@ -425,9 +452,11 @@ export function ModelsView() {
             label="Model tersedia"
             htmlFor="model-template"
             hint={
-              templates.length === 0
-                ? "Provider ini belum punya template model media. Isi kustom di bawah."
-                : "Pilih template untuk mengisi otomatis, atau Kustom."
+              templatesQuery.isPending
+                ? "Memuat template provider…"
+                : templates.length === 0
+                  ? "Provider ini belum punya template model media. Isi kustom di bawah."
+                  : "Pilih template untuk mengisi otomatis, atau Kustom."
             }
           >
             <Select
@@ -540,10 +569,6 @@ export function ModelsView() {
               </span>
             </span>
           </label>
-
-          <p className="rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-[10px] leading-relaxed text-muted">
-            Di demo, model baru tersimpan di CMS. Sinkronisasi ke Creator mengikuti backend.
-          </p>
         </div>
       </Dialog>
     </div>

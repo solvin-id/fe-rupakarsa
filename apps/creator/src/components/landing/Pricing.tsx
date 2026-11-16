@@ -3,6 +3,9 @@ import Link from "next/link";
 
 import { formatRupiahFromTokens, formatTokens } from "@rupakarsa/shared/lib/format";
 
+/** Static marketing copy mirrors the platform pricing defaults; no data fetch on the landing page. */
+const TOKEN_VALUE_RUPIAH = 500;
+
 const PLANS = [
   {
     name: "Video 5 detik",
@@ -76,7 +79,7 @@ export function Pricing() {
               </span>
             </div>
             <p className={`mt-1 text-sm ${plan.featured ? "text-canvas/60" : "text-muted"}`}>
-              {formatRupiahFromTokens(plan.tokens)} per render
+              {formatRupiahFromTokens(plan.tokens, TOKEN_VALUE_RUPIAH)} per render
             </p>
 
             <ul className="mt-6 flex flex-col gap-2.5">

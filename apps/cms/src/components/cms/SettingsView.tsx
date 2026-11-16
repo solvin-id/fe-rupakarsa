@@ -1,25 +1,19 @@
 "use client";
 
 import { CheckCircle2, MessageCircle, Phone, Save, Settings } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import type { FormEvent } from "react";
 
-import {
-  normalizeWhatsAppNumber,
-  whatsappLink,
-} from "@rupakarsa/shared/lib/contact-settings-cookie";
-import { useContactStore } from "@rupakarsa/shared/stores/contact-store";
+import { useAdminContactQuery, useUpdateContactMutation } from "@rupakarsa/shared/hooks/use-admin";
+import type { AdminContact } from "@rupakarsa/shared/lib/types";
+import { normalizeWhatsAppNumber, whatsappLink } from "@rupakarsa/shared/lib/whatsapp";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 import { Button, Field, TextInput } from "@rupakarsa/shared/ui";
 
 export function SettingsView() {
-  const hydrated = useContactStore((state) => state.hydrated);
-  const hydrate = useContactStore((state) => state.hydrate);
+  const contactQuery = useAdminContactQuery();
 
-  useEffect(() => {
-    hydrate();
-  }, [hydrate]);
-
-  if (!hydrated) {
+  if (contactQuery.isPending) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -27,12 +21,17 @@ export function SettingsView() {
     );
   }
 
-  return <SettingsForm />;
+  return (
+    <SettingsForm
+      contact={
+        contactQuery.data ?? { name: "Tim Rupakarsa", whatsapp: "", email: "halo@rupakarsa.id" }
+      }
+    />
+  );
 }
 
-function SettingsForm() {
-  const contact = useContactStore((state) => state.contact);
-  const save = useContactStore((state) => state.save);
+function SettingsForm({ contact }: { contact: AdminContact }) {
+  const updateContact = useUpdateContactMutation();
   const pushToast = useUiStore((state) => state.pushToast);
 
   const [name, setName] = useState(contact.name);
@@ -44,7 +43,8 @@ function SettingsForm() {
     ? whatsappLink(normalized, "Halo, saya ingin mengajukan akses Rupakarsa.")
     : null;
 
-  function handleSave(): void {
+  function handleSave(event?: FormEvent): void {
+    event?.preventDefault();
     if (name.trim().length < 2) {
       pushToast("error", "Nama admin minimal 2 karakter.");
       return;
@@ -58,12 +58,18 @@ function SettingsForm() {
       return;
     }
 
-    save({
-      name: name.trim(),
-      whatsapp: normalized,
-      email: email.trim().toLowerCase(),
-    });
-    pushToast("success", "Kontak admin disimpan. Halaman request akses langsung memakai nomor ini.");
+    updateContact.mutate(
+      { name: name.trim(), whatsapp: normalized, email: email.trim().toLowerCase() },
+      {
+        onSuccess: () => {
+          pushToast(
+            "success",
+            "Kontak admin disimpan. Halaman request akses langsung memakai nomor ini.",
+          );
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
   return (
@@ -100,7 +106,7 @@ function SettingsForm() {
             </div>
           </div>
 
-          <div className="mt-5 flex flex-col gap-4">
+          <form onSubmit={handleSave} className="mt-5 flex flex-col gap-4">
             <Field label="Nama admin" htmlFor="admin-name">
               <TextInput
                 id="admin-name"
@@ -122,7 +128,11 @@ function SettingsForm() {
                 placeholder="6281234567890"
               />
             </Field>
-            <Field label="Email admin" htmlFor="admin-email" hint="Dipakai sebagai fallback jika WhatsApp tidak tersedia.">
+            <Field
+              label="Email admin"
+              htmlFor="admin-email"
+              hint="Dipakai sebagai fallback jika WhatsApp tidak tersedia."
+            >
               <TextInput
                 id="admin-email"
                 type="email"
@@ -131,17 +141,18 @@ function SettingsForm() {
                 placeholder="halo@rupakarsa.id"
               />
             </Field>
-          </div>
 
-          <Button
-            variant="primary"
-            size="lg"
-            className="mt-5 w-full"
-            icon={<Save className="size-4" aria-hidden />}
-            onClick={handleSave}
-          >
-            Simpan kontak admin
-          </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              className="mt-1 w-full"
+              loading={updateContact.isPending}
+              icon={<Save className="size-4" aria-hidden />}
+            >
+              Simpan kontak admin
+            </Button>
+          </form>
         </section>
 
         <section className="card p-5 sm:p-6">
@@ -188,8 +199,8 @@ function SettingsForm() {
           <div className="mt-4 flex items-start gap-2 rounded-xl border border-border bg-white px-3 py-2.5 text-[10px] leading-relaxed text-muted">
             <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-success" aria-hidden />
             <p>
-              Perubahan disimpan di cookie bersama, jadi halaman request akses di Creator langsung
-              memakai nomor terbaru tanpa deploy ulang.
+              Perubahan tersimpan di server, jadi halaman request akses di Creator langsung memakai
+              nomor terbaru tanpa deploy ulang.
             </p>
           </div>
         </section>

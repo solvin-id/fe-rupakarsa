@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { formatTokens, formatWorkspaceRole } from "@rupakarsa/shared/lib/format";
 import type { Workspace, WorkspaceMembership } from "@rupakarsa/shared/lib/types";
-import { useSessionStore } from "@rupakarsa/shared/stores/session-store";
+import { useSwitchWorkspaceMutation } from "@rupakarsa/shared/hooks/use-session";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 
 export interface WorkspaceSwitcherProps {
@@ -22,7 +22,7 @@ export function WorkspaceSwitcher({
   workspaces,
 }: WorkspaceSwitcherProps) {
   const router = useRouter();
-  const switchWorkspace = useSessionStore((state) => state.switchWorkspace);
+  const switchWorkspace = useSwitchWorkspaceMutation();
   const pushToast = useUiStore((state) => state.pushToast);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -55,13 +55,15 @@ export function WorkspaceSwitcher({
       setOpen(false);
       return;
     }
-    const switched = switchWorkspace(workspace.id);
     setOpen(false);
-    if (!switched) {
-      pushToast("error", `${workspace.name} sedang tidak aktif.`);
-      return;
-    }
-    router.push("/app/projects");
+    switchWorkspace.mutate(workspace.id, {
+      onSuccess: () => {
+        router.push("/app/projects");
+      },
+      onError: (error) => {
+        pushToast("error", error.message);
+      },
+    });
   }
 
   return (

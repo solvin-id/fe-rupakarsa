@@ -12,9 +12,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import {
+  useAdminAccountsQuery,
+  useAdminModelsQuery,
+  useAdminProvidersQuery,
+  useAdminWorkspacesQuery,
+} from "@rupakarsa/shared/hooks/use-admin";
 import { formatTokens } from "@rupakarsa/shared/lib/format";
-import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
-import { useWorkspaceStore } from "@rupakarsa/shared/stores/workspace-store";
 
 const STEPS = [
   {
@@ -32,10 +36,15 @@ const STEPS = [
 ];
 
 export function OverviewView() {
-  const accounts = useAdminStore((state) => state.accounts);
-  const providers = useAdminStore((state) => state.providers);
-  const models = useAdminStore((state) => state.models);
-  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const accountsQuery = useAdminAccountsQuery();
+  const providersQuery = useAdminProvidersQuery();
+  const modelsQuery = useAdminModelsQuery();
+  const workspacesQuery = useAdminWorkspacesQuery();
+
+  const accounts = accountsQuery.data ?? [];
+  const providers = providersQuery.data ?? [];
+  const models = modelsQuery.data ?? [];
+  const workspaces = workspacesQuery.data?.workspaces ?? [];
 
   const activeWorkspaces = workspaces.filter((workspace) => workspace.isActive).length;
   const activeUsers = accounts.filter((account) => account.isActive).length;

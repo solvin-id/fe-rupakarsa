@@ -3,4 +3,5 @@ export * from "./auth";
 export * from "./slug";
 export * from "./format";
 export * from "./tokens";
-export * from "./plan";
+export * from "./whatsapp";
+export * from "./media";

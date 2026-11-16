@@ -165,16 +165,18 @@ export function Hero() {
               style={{ "--float-rotate": "2deg", animationDelay: "0.6s" } as React.CSSProperties}
             >
               <div className="flex items-center justify-between">
-                <p className="mono-label text-[9px] text-muted">Saldo workspace</p>
+                <p className="mono-label text-[9px] text-muted">Paket standar</p>
                 <span className="rounded-full bg-accent-3-soft px-2 py-0.5 text-[9px] font-medium text-[#3f6212]">
                   Aktif
                 </span>
               </div>
-              <p className="mt-1.5 text-2xl font-semibold tracking-[-0.04em] text-ink">4.000</p>
+              <p className="mt-1.5 text-2xl font-semibold tracking-[-0.04em] text-ink">
+                4.000 <span className="text-xs font-medium text-muted">token</span>
+              </p>
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink/10">
                 <div className="h-full w-[78%] rounded-full bg-accent" />
               </div>
-              <p className="mt-2 text-[10px] text-muted">250 Plan Mode gratis</p>
+              <p className="mt-2 text-[10px] text-muted">Rp 2.000.000 · 250 Plan Mode gratis</p>
             </div>
 
             <div className="absolute -bottom-2 right-4 z-20 hidden items-center gap-2 rounded-full border border-border bg-white px-3 py-2 shadow-card sm:flex">

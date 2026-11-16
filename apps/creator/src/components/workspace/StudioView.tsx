@@ -2,24 +2,33 @@
 
 import { ArrowLeft, Film, Image as ImageIcon, Layers, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
-import { GradientArt, type GradientVariant } from "@rupakarsa/shared/brand";
+import { GradientArt } from "@rupakarsa/shared/brand";
+import { usePublicConfigQuery, useSessionQuery } from "@rupakarsa/shared/hooks/use-session";
+import {
+  useCreatorModelsQuery,
+  useDeleteGenerationMutation,
+  useFolderGenerationsQuery,
+  useFoldersQuery,
+  useGenerateMutation,
+  useGenerationQuery,
+  usePlanMutation,
+  useUploadReferenceMutation,
+} from "@rupakarsa/shared/hooks/use-projects";
+import { queryKeys } from "@rupakarsa/shared/lib/api/keys";
+import { formatDateTime, formatRelative, formatTokens } from "@rupakarsa/shared/lib/format";
+import { isVideoUrl } from "@rupakarsa/shared/lib/media";
+import type { Generation, GenerationStatus, MediaType } from "@rupakarsa/shared/lib/types";
+import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 import { Button } from "@rupakarsa/shared/ui";
 import { Dialog } from "@rupakarsa/shared/ui";
+
 import { GeneratorPanel } from "@/components/workspace/GeneratorPanel";
 import { HistoryPanel } from "@/components/workspace/HistoryPanel";
 import { PlanCanvas } from "@/components/workspace/PlanCanvas";
 import type { ReferenceFile } from "@/components/workspace/AssetDropzone";
-import { downloadGenerationPoster } from "@rupakarsa/shared/lib/download";
-import { formatDateTime, formatRelative, formatTokens } from "@rupakarsa/shared/lib/format";
-import { buildPlanBlueprint } from "@rupakarsa/shared/lib/plan";
-import { planModeCost } from "@rupakarsa/shared/lib/tokens";
-import type { Generation, GenerationStatus, MediaType } from "@rupakarsa/shared/lib/types";
-import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
-import { useProjectStore } from "@rupakarsa/shared/stores/project-store";
-import { useSessionStore } from "@rupakarsa/shared/stores/session-store";
-import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 
 const STATUS_LABEL: Record<GenerationStatus, string> = {
   QUEUED: "Queued",
@@ -28,57 +37,43 @@ const STATUS_LABEL: Record<GenerationStatus, string> = {
   FAILED: "Failed",
 };
 
-function variantFor(generation: Generation): GradientVariant {
-  const key = generation.outputUrl?.replace("gradient:", "");
-  const allowed: GradientVariant[] = ["sunset", "violet", "lime", "ocean", "peach", "sand", "night"];
-  if (key && allowed.includes(key as GradientVariant)) return key as GradientVariant;
-  return generation.mediaType === "VIDEO" ? "sunset" : "violet";
-}
-
 export function StudioView({ folderId }: { folderId: string }) {
-  const session = useSessionStore((state) => state.session);
-  const adjustTokens = useSessionStore((state) => state.adjustTokens);
-  const consumePlanQuota = useSessionStore((state) => state.consumePlanQuota);
+  const sessionQuery = useSessionQuery();
+  const foldersQuery = useFoldersQuery();
+  const generationsQuery = useFolderGenerationsQuery(folderId);
+  const modelsQuery = useCreatorModelsQuery();
+  const configQuery = usePublicConfigQuery();
 
-  const folders = useProjectStore((state) => state.folders);
-  const generations = useProjectStore((state) => state.generations);
-  const addGeneration = useProjectStore((state) => state.addGeneration);
-  const updateGeneration = useProjectStore((state) => state.updateGeneration);
-  const deleteGeneration = useProjectStore((state) => state.deleteGeneration);
-  const projectHydrated = useProjectStore((state) => state.hydrated);
-
-  const models = useAdminStore((state) => state.models);
-  const adminHydrated = useAdminStore((state) => state.hydrated);
+  const planMutation = usePlanMutation();
+  const generateMutation = useGenerateMutation();
+  const uploadReference = useUploadReferenceMutation();
+  const deleteGeneration = useDeleteGenerationMutation();
   const pushToast = useUiStore((state) => state.pushToast);
+  const queryClient = useQueryClient();
 
   const [mediaType, setMediaType] = useState<MediaType>("VIDEO");
-  const [modelId, setModelId] = useState("mdl_wan_10");
-  const [durationSec, setDurationSec] = useState<number | undefined>(10);
-  const [resolution, setResolution] = useState("1080p");
-  const [aspectRatio, setAspectRatio] = useState("16:9");
+  const [modelId, setModelId] = useState("");
+  const [durationSec, setDurationSec] = useState<number | undefined>(undefined);
+  const [resolution, setResolution] = useState("");
+  const [aspectRatio, setAspectRatio] = useState("");
   const [rawPrompt, setRawPrompt] = useState("");
   const [plannedPrompt, setPlannedPrompt] = useState("");
   const [direction, setDirection] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
-  const [planState, setPlanState] = useState<"idle" | "planning" | "ready">("idle");
+  const [planReady, setPlanReady] = useState(false);
   const [referenceFile, setReferenceFile] = useState<ReferenceFile | null>(null);
   const [simulateFailure, setSimulateFailure] = useState(false);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [activeGenerationId, setActiveGenerationId] = useState<string | null>(null);
   const [detailTarget, setDetailTarget] = useState<Generation | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Generation | null>(null);
 
-  const folder = folders.find(
-    (item) => item.id === folderId && item.workspaceId === session?.workspace.id,
-  );
-  const folderGenerations = useMemo(
-    () =>
-      generations
-        .filter(
-          (item) => item.folderId === folderId && item.workspaceId === session?.workspace.id,
-        )
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [generations, folderId, session?.workspace.id],
-  );
+  const handledStatusRef = useRef<string | null>(null);
+
+  const session = sessionQuery.data;
+  const folder = (foldersQuery.data ?? []).find((item) => item.id === folderId) ?? null;
+  const models = useMemo(() => modelsQuery.data ?? [], [modelsQuery.data]);
+  const config = configQuery.data;
+
   const activeModels = useMemo(
     () => models.filter((item) => item.isActive && item.mediaType === mediaType),
     [models, mediaType],
@@ -97,18 +92,48 @@ export function StudioView({ folderId }: { folderId: string }) {
       ? aspectRatio
       : (model?.allowedParams.aspectRatios[0] ?? aspectRatio);
 
-  const planCost = planModeCost(session?.workspace.freePlanRemaining ?? 0);
-  const activeGeneration = activeJobId
-    ? (generations.find((item) => item.id === activeJobId) ?? null)
-    : null;
+  const folderGenerations = useMemo(() => {
+    const rows = generationsQuery.data ?? [];
+    return [...rows].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+  }, [generationsQuery.data]);
+
+  const activeGenerationQuery = useGenerationQuery(activeGenerationId, {
+    refetchInterval: activeGenerationId ? 1500 : false,
+  });
+
+  const activeGeneration = activeGenerationQuery.data ?? null;
   const activeStatus = activeGeneration?.status ?? null;
-  const canGenerate = Boolean(
-    plannedPrompt.trim() &&
-      model &&
-      session &&
-      session.workspace.tokenBalance >= model.tokenCost &&
-      !activeJobId,
-  );
+  const generating = Boolean(activeGenerationId);
+
+  useEffect(() => {
+    const current = activeGeneration;
+    if (!current || !activeGenerationId) return;
+    if (current.status !== "COMPLETED" && current.status !== "FAILED") return;
+    if (handledStatusRef.current === `${current.id}:${current.status}`) return;
+    handledStatusRef.current = `${current.id}:${current.status}`;
+
+    setActiveGenerationId(null);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.generations(folderId) });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.folders });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.session });
+    pushToast(
+      current.status === "COMPLETED" ? "success" : "error",
+      current.status === "COMPLETED"
+        ? "Render selesai. Hasil tersimpan di folder proyek."
+        : "Render gagal. Token dikembalikan otomatis.",
+    );
+  }, [activeGeneration, activeGenerationId, folderId, pushToast, queryClient]);
+
+  const planCost = useMemo(() => {
+    const freePlanRemaining = session?.workspace.freePlanRemaining ?? 0;
+    if (freePlanRemaining > 0) return { tokens: 0, usesFreeQuota: true };
+    return { tokens: config?.pricing.planModeTokenCost ?? 1, usesFreeQuota: false };
+  }, [session?.workspace.freePlanRemaining, config?.pricing.planModeTokenCost]);
+
+  const balance = session?.workspace.tokenBalance ?? 0;
+  const canGenerate = Boolean(plannedPrompt.trim() && model && !generating && balance >= (model?.tokenCost ?? 0));
 
   const videos = folderGenerations.filter((item) => item.mediaType === "VIDEO").length;
   const images = folderGenerations.filter((item) => item.mediaType === "IMAGE").length;
@@ -116,145 +141,104 @@ export function StudioView({ folderId }: { folderId: string }) {
 
   function handleMediaTypeChange(next: MediaType): void {
     setMediaType(next);
-    const nextModel = models.find((item) => item.isActive && item.mediaType === next);
-    if (nextModel) {
-      setModelId(nextModel.id);
-      setDurationSec(nextModel.allowedParams.durations?.[0]);
-      setResolution(nextModel.allowedParams.resolutions[0] ?? "");
-      setAspectRatio(nextModel.allowedParams.aspectRatios[0] ?? "");
-    }
-    setPlanState("idle");
+    setModelId("");
+    setDurationSec(undefined);
+    setResolution("");
+    setAspectRatio("");
+    setPlanReady(false);
     setPlannedPrompt("");
   }
 
   function handleModelChange(id: string): void {
     setModelId(id);
-    const next = models.find((item) => item.id === id);
-    if (next) {
-      setDurationSec(next.allowedParams.durations?.[0]);
-      setResolution(next.allowedParams.resolutions[0] ?? "");
-      setAspectRatio(next.allowedParams.aspectRatios[0] ?? "");
-    }
-    setPlanState("idle");
+    setDurationSec(undefined);
+    setResolution("");
+    setAspectRatio("");
+    setPlanReady(false);
     setPlannedPrompt("");
   }
 
   function handlePlan(): void {
-    if (!session || !model) return;
+    if (!model) return;
     if (!rawPrompt.trim()) {
       pushToast("error", "Tulis brief terlebih dahulu.");
       return;
     }
-    const cost = planModeCost(session.workspace.freePlanRemaining);
-    if (!cost.usesFreeQuota && session.workspace.tokenBalance < cost.tokens) {
+    if (!planCost.usesFreeQuota && balance < planCost.tokens) {
       pushToast("error", "Saldo token tidak cukup untuk Plan Mode.");
       return;
     }
-    const result = consumePlanQuota();
-    if (!result.usesFreeQuota && result.tokens === 0) {
-      pushToast("error", "Kuota plan habis dan saldo tidak cukup.");
-      return;
-    }
 
-    setPlanState("planning");
-    window.setTimeout(() => {
-      const blueprint = buildPlanBlueprint({
+    planMutation.mutate(
+      {
+        modelId: model.id,
         rawPrompt,
-        model,
-        durationSec: effectiveDuration,
+        durationSec: model.mediaType === "VIDEO" ? effectiveDuration : undefined,
         resolution: effectiveResolution,
         aspectRatio: effectiveAspect,
         hasReference: Boolean(referenceFile),
-      });
-      setPlannedPrompt(blueprint.prompt);
-      setDirection(blueprint.direction);
-      setNegativePrompt(blueprint.negativePrompt);
-      setPlanState("ready");
-      pushToast(
-        "success",
-        result.usesFreeQuota
-          ? "Plan dibuat dengan kuota gratis."
-          : "Plan dibuat. 1 token terpakai.",
-      );
-    }, 1200);
+      },
+      {
+        onSuccess: (data) => {
+          setPlannedPrompt(data.blueprint.prompt);
+          setDirection(data.blueprint.direction);
+          setNegativePrompt(data.blueprint.negativePrompt);
+          setPlanReady(true);
+          pushToast(
+            "success",
+            data.cost.usesFreeQuota
+              ? "Plan dibuat dengan kuota gratis."
+              : "Plan dibuat. 1 token terpakai.",
+          );
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
-  function handleGenerate(): void {
-    if (!session || !model) return;
+  async function handleGenerate(): Promise<void> {
+    if (!model) return;
     if (!plannedPrompt.trim()) {
       pushToast("error", "Buat plan terlebih dahulu.");
       return;
     }
-    if (session.workspace.tokenBalance < model.tokenCost) {
+    if (balance < model.tokenCost) {
       pushToast("error", "Saldo token tidak cukup. Hubungi Superadmin untuk top-up.");
       return;
     }
-    if (activeJobId) return;
+    if (generating) return;
 
-    const id = `gen_${crypto.randomUUID().slice(0, 8)}`;
-    const now = new Date().toISOString();
-    const variant: GradientVariant =
-      model.mediaType === "VIDEO" ? (model.id === "mdl_wan_5" ? "peach" : "sunset") : "violet";
-
-    const generation: Generation = {
-      id,
-      workspaceId: session.workspace.id,
-      folderId,
-      userId: session.user.id,
-      modelId: model.id,
-      modelName: model.displayName,
-      mediaType: model.mediaType,
-      rawPrompt: rawPrompt.trim(),
-      plannedPrompt: plannedPrompt.trim(),
-      referenceImageUrl: referenceFile?.name ?? null,
-      selectedParams: {
-        durationSec: model.mediaType === "VIDEO" ? effectiveDuration : undefined,
-        resolution: effectiveResolution,
-        aspectRatio: effectiveAspect,
-      },
-      tokensCharged: model.tokenCost,
-      status: "QUEUED",
-      externalJobId: `hf_job_${crypto.randomUUID().slice(0, 6)}`,
-      outputUrl: null,
-      errorMessage: null,
-      refunded: false,
-      createdAt: now,
-      completedAt: null,
-    };
-
-    adjustTokens(-model.tokenCost);
-    addGeneration(generation);
-    setActiveJobId(id);
-
-    window.setTimeout(() => {
-      updateGeneration(id, { status: "RENDERING" });
-    }, 1200);
-
-    window.setTimeout(() => {
-      if (simulateFailure) {
-        updateGeneration(id, {
-          status: "FAILED",
-          errorMessage: "Provider menolak render (simulasi). Token dikembalikan otomatis.",
-          refunded: true,
-          completedAt: new Date().toISOString(),
-        });
-        adjustTokens(model.tokenCost);
-        pushToast("error", "Render gagal. Token dikembalikan otomatis.");
-      } else {
-        updateGeneration(id, {
-          status: "COMPLETED",
-          outputUrl: `gradient:${variant}`,
-          completedAt: new Date().toISOString(),
-        });
-        pushToast("success", "Render selesai. Hasil tersimpan di folder proyek.");
+    try {
+      let referenceImageUrl: string | null = null;
+      if (referenceFile) {
+        const uploaded = await uploadReference.mutateAsync(referenceFile.file);
+        referenceImageUrl = uploaded.url;
       }
-      setActiveJobId((current) => (current === id ? null : current));
-    }, 4200);
+
+      const created = await generateMutation.mutateAsync({
+        folderId,
+        modelId: model.id,
+        rawPrompt: rawPrompt.trim(),
+        plannedPrompt: plannedPrompt.trim(),
+        referenceImageUrl,
+        selectedParams: {
+          durationSec: model.mediaType === "VIDEO" ? effectiveDuration : undefined,
+          resolution: effectiveResolution,
+          aspectRatio: effectiveAspect,
+        },
+        simulateFailure,
+      });
+
+      handledStatusRef.current = null;
+      setActiveGenerationId(created.generation.id);
+    } catch (error) {
+      pushToast("error", error instanceof Error ? error.message : "Render gagal dijalankan.");
+    }
   }
 
   function handleRemix(generation: Generation): void {
     setMediaType(generation.mediaType);
-    setModelId(generation.modelId);
+    setModelId(generation.modelId ?? "");
     setDurationSec(generation.selectedParams.durationSec);
     setResolution(generation.selectedParams.resolution);
     setAspectRatio(generation.selectedParams.aspectRatio);
@@ -262,26 +246,43 @@ export function StudioView({ folderId }: { folderId: string }) {
     setPlannedPrompt(generation.plannedPrompt);
     setDirection("");
     setNegativePrompt("");
-    setPlanState("ready");
+    setPlanReady(true);
     setDetailTarget(null);
     document.getElementById("plan-canvas")?.scrollIntoView({ behavior: "smooth", block: "start" });
     pushToast("info", "Plan dimuat ulang ke canvas.");
   }
 
   function handleDownload(generation: Generation): void {
-    downloadGenerationPoster(generation);
-    pushToast("info", "Poster demo diunduh. File asli tersedia setelah integrasi storage.");
+    if (!generation.outputUrl) {
+      pushToast("error", "Hasil render belum tersedia.");
+      return;
+    }
+    // The API answers `?download=1` with Content-Disposition: attachment, so a same-tab anchor
+    // downloads the file without a popup or a navigation away from the studio.
+    const link = document.createElement("a");
+    link.href = `${generation.outputUrl}?download=1`;
+    link.rel = "noopener";
+    document.body.append(link);
+    link.click();
+    link.remove();
   }
 
   function handleDelete(): void {
     if (!deleteTarget) return;
-    deleteGeneration(deleteTarget.id);
-    setDeleteTarget(null);
-    setDetailTarget(null);
-    pushToast("success", "Riwayat render dihapus.");
+    deleteGeneration.mutate(
+      { generationId: deleteTarget.id, folderId },
+      {
+        onSuccess: () => {
+          setDeleteTarget(null);
+          setDetailTarget(null);
+          pushToast("success", "Riwayat render dihapus.");
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
-  if (!projectHydrated || !adminHydrated) {
+  if (foldersQuery.isPending || generationsQuery.isPending || modelsQuery.isPending) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -352,9 +353,10 @@ export function StudioView({ folderId }: { folderId: string }) {
             onAspectRatioChange={setAspectRatio}
             referenceFile={referenceFile}
             onReferenceChange={setReferenceFile}
-            balance={session?.workspace.tokenBalance ?? 0}
+            balance={balance}
+            tokenValueRupiah={config?.pricing.tokenValueRupiah ?? 500}
             onError={(message) => pushToast("error", message)}
-            disabled={Boolean(activeJobId)}
+            disabled={generating}
           />
         </div>
 
@@ -367,7 +369,7 @@ export function StudioView({ folderId }: { folderId: string }) {
             direction={direction}
             negativePrompt={negativePrompt}
             onNegativePromptChange={setNegativePrompt}
-            planState={planState}
+            planState={planMutation.isPending ? "planning" : planReady ? "ready" : "idle"}
             onPlan={handlePlan}
             planCost={planCost}
             freePlanRemaining={session?.workspace.freePlanRemaining ?? 0}
@@ -375,18 +377,20 @@ export function StudioView({ folderId }: { folderId: string }) {
             durationSec={effectiveDuration}
             resolution={effectiveResolution}
             aspectRatio={effectiveAspect}
-            balance={session?.workspace.tokenBalance ?? 0}
-            onGenerate={handleGenerate}
-            generating={Boolean(activeJobId)}
+            balance={balance}
+            tokenValueRupiah={config?.pricing.tokenValueRupiah ?? 500}
+            onGenerate={() => void handleGenerate()}
+            generating={generating || uploadReference.isPending || generateMutation.isPending}
             simulateFailure={simulateFailure}
             onSimulateFailureChange={setSimulateFailure}
             canGenerate={canGenerate}
             activeStatus={activeStatus}
+            showSimulation={config?.features.simulation ?? false}
           />
 
           <HistoryPanel
             generations={folderGenerations}
-            activeJobId={activeJobId}
+            activeJobId={activeGenerationId}
             onOpen={setDetailTarget}
             onDownload={handleDownload}
             onRemix={handleRemix}
@@ -414,9 +418,9 @@ export function StudioView({ folderId }: { folderId: string }) {
               <Button
                 variant="secondary"
                 onClick={() => handleDownload(detailTarget)}
-                disabled={detailTarget.status !== "COMPLETED"}
+                disabled={detailTarget.status !== "COMPLETED" || !detailTarget.outputUrl}
               >
-                Unduh poster
+                Unduh hasil
               </Button>
               <Button variant="primary" onClick={() => handleRemix(detailTarget)}>
                 Remix plan
@@ -427,12 +431,23 @@ export function StudioView({ folderId }: { folderId: string }) {
       >
         {detailTarget ? (
           <div className="flex flex-col gap-4">
-            {detailTarget.status === "COMPLETED" ? (
-              <GradientArt
-                variant={variantFor(detailTarget)}
-                className="aspect-video w-full"
-                rounded="rounded-2xl"
-              >
+            {detailTarget.status === "COMPLETED" && detailTarget.outputUrl ? (
+              isVideoUrl(detailTarget.outputUrl) ? (
+                <video
+                  controls
+                  src={detailTarget.outputUrl}
+                  className="aspect-video w-full rounded-2xl bg-ink"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={detailTarget.outputUrl}
+                  alt={detailTarget.modelName}
+                  className="aspect-video w-full rounded-2xl border border-border object-cover"
+                />
+              )
+            ) : detailTarget.status === "COMPLETED" ? (
+              <GradientArt variant="sunset" className="aspect-video w-full" rounded="rounded-2xl">
                 <div className="relative z-10 flex h-full items-center justify-center">
                   <span className="flex size-14 items-center justify-center rounded-full border border-white/30 bg-white/15 text-white backdrop-blur">
                     {detailTarget.mediaType === "VIDEO" ? (
@@ -508,7 +523,7 @@ export function StudioView({ folderId }: { folderId: string }) {
             <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
               Batal
             </Button>
-            <Button variant="danger" onClick={handleDelete}>
+            <Button variant="danger" loading={deleteGeneration.isPending} onClick={handleDelete}>
               Hapus
             </Button>
           </>

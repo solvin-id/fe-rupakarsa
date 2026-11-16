@@ -14,30 +14,36 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
+import { useSessionQuery, useSwitchWorkspaceMutation } from "@rupakarsa/shared/hooks/use-session";
+import {
+  useApproveJoinRequestMutation,
+  useCreateWorkspaceMutation,
+  useDeleteWorkspaceMutation,
+  useLeaveWorkspaceMutation,
+  useRejectJoinRequestMutation,
+  useRemoveMemberMutation,
+  useRenameWorkspaceMutation,
+  useRequestJoinMutation,
+  useUpdateMemberRoleMutation,
+  useWorkspaceMembersQuery,
+  useWorkspacesQuery,
+} from "@rupakarsa/shared/hooks/use-workspaces";
 import { canManageWorkspace, isWorkspaceOwner } from "@rupakarsa/shared/lib/auth";
 import { formatTokens, formatWorkspaceRole } from "@rupakarsa/shared/lib/format";
 import { slugify } from "@rupakarsa/shared/lib/slug";
-import type {
-  ActionResult,
-  Workspace,
-  WorkspaceJoinRequest,
-  WorkspaceMembership,
-} from "@rupakarsa/shared/lib/types";
-import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
-import { useSessionStore } from "@rupakarsa/shared/stores/session-store";
+import type { JoinRequestStatus, Workspace } from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
-import { useWorkspaceStore } from "@rupakarsa/shared/stores/workspace-store";
 import { Button, Dialog, Field, TextInput } from "@rupakarsa/shared/ui";
 
-const STATUS_STYLE: Record<WorkspaceJoinRequest["status"], string> = {
+const STATUS_STYLE: Record<JoinRequestStatus, string> = {
   PENDING: "bg-accent-soft text-accent-strong",
   APPROVED: "bg-success/10 text-success",
   REJECTED: "bg-danger/10 text-danger",
 };
 
-const STATUS_LABEL: Record<WorkspaceJoinRequest["status"], string> = {
+const STATUS_LABEL: Record<JoinRequestStatus, string> = {
   PENDING: "Menunggu",
   APPROVED: "Disetujui",
   REJECTED: "Ditolak",
@@ -45,14 +51,20 @@ const STATUS_LABEL: Record<WorkspaceJoinRequest["status"], string> = {
 
 export function WorkspaceHubView() {
   const router = useRouter();
-  const session = useSessionStore((state) => state.session);
-  const sessionHydrated = useSessionStore((state) => state.hydrated);
-  const workspaces = useWorkspaceStore((state) => state.workspaces);
-  const memberships = useWorkspaceStore((state) => state.memberships);
-  const requests = useWorkspaceStore((state) => state.requests);
-  const workspaceHydrated = useWorkspaceStore((state) => state.hydrated);
-  const accounts = useAdminStore((state) => state.accounts);
+  const sessionQuery = useSessionQuery();
+  const workspacesQuery = useWorkspacesQuery();
   const pushToast = useUiStore((state) => state.pushToast);
+
+  const createWorkspace = useCreateWorkspaceMutation();
+  const switchWorkspace = useSwitchWorkspaceMutation();
+  const renameWorkspace = useRenameWorkspaceMutation();
+  const deleteWorkspace = useDeleteWorkspaceMutation();
+  const leaveWorkspace = useLeaveWorkspaceMutation();
+  const requestJoin = useRequestJoinMutation();
+  const approveRequest = useApproveJoinRequestMutation();
+  const rejectRequest = useRejectJoinRequestMutation();
+  const updateMemberRole = useUpdateMemberRoleMutation();
+  const removeMember = useRemoveMemberMutation();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
@@ -67,76 +79,37 @@ export function WorkspaceHubView() {
   const [renameDraft, setRenameDraft] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState("");
 
+  const membersQuery = useWorkspaceMembersQuery(manageTargetId);
+
+  const session = sessionQuery.data;
+  const payload = workspacesQuery.data;
+  const workspaces = payload?.workspaces ?? [];
+  const memberships = payload?.memberships ?? [];
+  const manageableRequests = payload?.manageableRequests ?? [];
+  const myRequests = payload?.myRequests ?? [];
+
   const userId = session?.user.id ?? "";
-  const cards = useMemo(
-    () =>
-      memberships
-        .filter((membership) => membership.userId === userId)
-        .map((membership) => ({
-          membership,
-          workspace: workspaces.find((item) => item.id === membership.workspaceId),
-        }))
-        .filter(
-          (card): card is { membership: WorkspaceMembership; workspace: Workspace } =>
-            Boolean(card.workspace),
-        ),
-    [memberships, workspaces, userId],
-  );
-
-  const manageableRequests = useMemo(() => {
-    const managedIds = new Set(
-      memberships
-        .filter(
-          (membership) => membership.userId === userId && canManageWorkspace(membership.role),
-        )
-        .map((membership) => membership.workspaceId),
+  const cards = memberships
+    .map((membership) => ({
+      membership,
+      workspace: workspaces.find((item) => item.id === membership.workspaceId),
+    }))
+    .filter((card): card is { membership: (typeof memberships)[number]; workspace: Workspace } =>
+      Boolean(card.workspace),
     );
-    return requests
-      .filter((request) => request.status === "PENDING" && managedIds.has(request.workspaceId))
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [memberships, requests, userId]);
-
-  const myRequests = useMemo(
-    () =>
-      requests
-        .filter((request) => request.userId === userId)
-        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [requests, userId],
-  );
 
   const manageWorkspace = workspaces.find((item) => item.id === manageTargetId) ?? null;
   const deleteWorkspaceTarget = workspaces.find((item) => item.id === deleteTargetId) ?? null;
-  const manageMembers = memberships.filter(
-    (membership) => membership.workspaceId === manageTargetId,
-  );
+  const manageMembers = membersQuery.data ?? [];
   const manageRequests = manageableRequests.filter(
     (request) => request.workspaceId === manageTargetId,
   );
-  const actorRole =
-    memberships.find(
-      (membership) =>
-        membership.workspaceId === manageTargetId && membership.userId === userId,
-    )?.role ?? null;
-
-  function syncSession(): boolean {
-    useAdminStore.getState().refreshAccounts();
-    useSessionStore.getState().refreshAccess();
-    const current = useSessionStore.getState().session;
-    if (!current) {
-      router.replace("/login");
-      return false;
-    }
-    return true;
-  }
-
-  function handleResult(result: ActionResult, message: string): void {
-    if (!result.ok) {
-      pushToast("error", result.message);
-      return;
-    }
-    if (!syncSession()) return;
-    pushToast("success", message);
-  }
+  const actorRole = manageTargetId
+    ? (memberships.find(
+        (membership) =>
+          membership.workspaceId === manageTargetId && membership.userId === userId,
+      )?.role ?? null)
+    : null;
 
   function openCreate(): void {
     setDraftName("");
@@ -155,115 +128,142 @@ export function WorkspaceHubView() {
   }
 
   function handleCreate(): void {
-    if (!session) return;
-    if (draftName.trim().length < 2) {
+    const name = draftName.trim();
+    if (name.length < 2) {
       pushToast("error", "Nama workspace minimal 2 karakter.");
       return;
     }
-    const created = useWorkspaceStore.getState().createWorkspace({
-      name: draftName,
-      slug: slugTouched ? draftSlug : undefined,
-      ownerId: session.user.id,
-    });
-    if (!created.ok) {
-      pushToast("error", created.message);
+    const slug = draftSlug.trim();
+    if (slugTouched && slug.length < 2) {
+      pushToast("error", "Slug workspace minimal 2 karakter.");
       return;
     }
-    if (!useSessionStore.getState().switchWorkspace(created.value.id)) {
-      pushToast("error", "Workspace dibuat tetapi gagal dibuka.");
-      return;
-    }
-    setCreateOpen(false);
-    syncSession();
-    pushToast("success", `Workspace ${created.value.name} dibuat.`);
-    router.push("/app/projects");
+
+    createWorkspace.mutate(
+      { name, slug: slugTouched ? slug : undefined },
+      {
+        onSuccess: (workspace) => {
+          switchWorkspace.mutate(workspace.id, {
+            onSuccess: () => {
+              setCreateOpen(false);
+              pushToast("success", `Workspace ${workspace.name} dibuat.`);
+              router.push("/app/projects");
+            },
+            onError: (error) => {
+              setCreateOpen(false);
+              pushToast("error", error.message);
+            },
+          });
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
   function handleJoin(): void {
-    if (!session) return;
-    const result = useWorkspaceStore.getState().requestJoin({
-      slug: joinSlug,
-      userId: session.user.id,
-      message: joinMessage,
-    });
-    if (!result.ok) {
-      pushToast("error", result.message);
+    const slug = joinSlug.trim();
+    if (slug.length < 2) {
+      pushToast("error", "Slug workspace minimal 2 karakter.");
       return;
     }
-    setJoinOpen(false);
-    setJoinSlug("");
-    setJoinMessage("");
-    pushToast("success", "Permintaan dikirim. Tunggu persetujuan owner/admin.");
+    requestJoin.mutate(
+      { slug, message: joinMessage.trim() },
+      {
+        onSuccess: () => {
+          setJoinOpen(false);
+          setJoinSlug("");
+          setJoinMessage("");
+          pushToast("success", "Permintaan dikirim. Tunggu persetujuan owner/admin.");
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
   function handleOpen(workspace: Workspace): void {
     if (workspace.id === session?.workspace.id) return;
-    if (!useSessionStore.getState().switchWorkspace(workspace.id)) {
-      pushToast("error", `${workspace.name} sedang tidak aktif.`);
-      return;
-    }
-    router.push("/app/projects");
+    switchWorkspace.mutate(workspace.id, {
+      onSuccess: () => {
+        router.push("/app/projects");
+      },
+      onError: (error) => pushToast("error", error.message),
+    });
   }
 
   function handleLeave(workspace: Workspace): void {
-    const result = useWorkspaceStore.getState().leaveWorkspace(workspace.id, userId);
-    handleResult(result, `Anda keluar dari ${workspace.name}.`);
+    leaveWorkspace.mutate(workspace.id, {
+      onSuccess: () => pushToast("success", `Anda keluar dari ${workspace.name}.`),
+      onError: (error) => pushToast("error", error.message),
+    });
   }
 
   function handleRename(): void {
     if (!manageWorkspace) return;
-    const result = useWorkspaceStore
-      .getState()
-      .updateWorkspace(manageWorkspace.id, { name: renameDraft });
-    handleResult(result, "Nama workspace diperbarui.");
+    renameWorkspace.mutate(
+      { workspaceId: manageWorkspace.id, name: renameDraft },
+      {
+        onSuccess: () => pushToast("success", "Nama workspace diperbarui."),
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
   function handleApprove(requestId: string): void {
-    const result = useWorkspaceStore.getState().approveRequest(requestId, userId);
-    handleResult(result, "Permintaan disetujui.");
+    approveRequest.mutate(requestId, {
+      onSuccess: () => pushToast("success", "Permintaan disetujui."),
+      onError: (error) => pushToast("error", error.message),
+    });
   }
 
   function handleReject(requestId: string): void {
-    const result = useWorkspaceStore.getState().rejectRequest(requestId, userId);
-    handleResult(result, "Permintaan ditolak.");
+    rejectRequest.mutate(requestId, {
+      onSuccess: () => pushToast("success", "Permintaan ditolak."),
+      onError: (error) => pushToast("error", error.message),
+    });
   }
 
   function handleRoleChange(targetId: string, role: "ADMIN" | "MEMBER"): void {
     if (!manageWorkspace) return;
-    const result = useWorkspaceStore
-      .getState()
-      .setMemberRole(manageWorkspace.id, userId, targetId, role);
-    handleResult(result, `Role anggota diubah menjadi ${formatWorkspaceRole(role)}.`);
+    updateMemberRole.mutate(
+      { workspaceId: manageWorkspace.id, userId: targetId, role },
+      {
+        onSuccess: () => toast(`Role anggota diubah menjadi ${formatWorkspaceRole(role)}.`),
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
   function handleRemoveMember(targetId: string): void {
     if (!manageWorkspace) return;
-    const result = useWorkspaceStore.getState().removeMember(manageWorkspace.id, userId, targetId);
-    handleResult(result, "Anggota dikeluarkan dari workspace.");
+    removeMember.mutate(
+      { workspaceId: manageWorkspace.id, userId: targetId },
+      {
+        onSuccess: () => toast("Anggota dikeluarkan dari workspace."),
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
+  }
+
+  function toast(message: string): void {
+    pushToast("success", message);
   }
 
   function handleDelete(): void {
     if (!deleteWorkspaceTarget) return;
     const removed = deleteWorkspaceTarget;
-    const result = useWorkspaceStore.getState().deleteWorkspace(removed.id, userId);
-    if (!result.ok) {
-      pushToast("error", result.message);
-      return;
-    }
-    setDeleteTargetId(null);
-    setManageTargetId(null);
-    setDeleteConfirm("");
-    useAdminStore.getState().refreshAccounts();
-    useSessionStore.getState().refreshAccess();
-    pushToast("success", `Workspace ${removed.name} dihapus.`);
-    if (!useSessionStore.getState().session) {
-      router.replace("/login");
-      return;
-    }
-    router.replace("/app/projects");
+    deleteWorkspace.mutate(removed.id, {
+      onSuccess: () => {
+        setDeleteTargetId(null);
+        setManageTargetId(null);
+        setDeleteConfirm("");
+        pushToast("success", `Workspace ${removed.name} dihapus.`);
+        router.replace("/app/projects");
+      },
+      onError: (error) => pushToast("error", error.message),
+    });
   }
 
-  if (!sessionHydrated || !workspaceHydrated || !session) {
+  if (sessionQuery.isPending || workspacesQuery.isPending || !session) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -414,7 +414,6 @@ export function WorkspaceHubView() {
           <h2 className="text-lg font-semibold tracking-[-0.02em] text-ink">Permintaan bergabung</h2>
           <div className="mt-3 overflow-hidden rounded-[1.75rem] border border-border bg-white">
             {manageableRequests.map((request) => {
-              const account = accounts.find((item) => item.id === request.userId);
               const requestWorkspace = workspaces.find(
                 (item) => item.id === request.workspaceId,
               );
@@ -424,11 +423,9 @@ export function WorkspaceHubView() {
                   className="flex flex-col gap-3 border-b border-border/60 px-5 py-4 last:border-b-0 sm:flex-row sm:items-center"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink">
-                      {account?.fullName ?? request.userId}
-                    </p>
+                    <p className="truncate text-sm font-medium text-ink">{request.user.fullName}</p>
                     <p className="truncate text-[10px] text-muted">
-                      {account?.email ?? "—"} · {requestWorkspace?.name ?? "—"}
+                      {request.user.email} · {requestWorkspace?.name ?? "—"}
                     </p>
                     {request.message ? (
                       <p className="mt-1 text-[11px] leading-relaxed text-muted">
@@ -470,31 +467,24 @@ export function WorkspaceHubView() {
           </p>
         ) : (
           <div className="mt-3 overflow-hidden rounded-[1.75rem] border border-border bg-white">
-            {myRequests.map((request) => {
-              const requestWorkspace = workspaces.find(
-                (item) => item.id === request.workspaceId,
-              );
-              return (
-                <div
-                  key={request.id}
-                  className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5 last:border-b-0"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink">
-                      {requestWorkspace?.name ?? request.workspaceId}
-                    </p>
-                    <p className="truncate text-[10px] text-muted">
-                      {request.message || "Tanpa pesan"}
-                    </p>
-                  </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-medium ${STATUS_STYLE[request.status]}`}
-                  >
-                    {STATUS_LABEL[request.status]}
-                  </span>
+            {myRequests.map((request) => (
+              <div
+                key={request.id}
+                className="flex items-center gap-3 border-b border-border/60 px-5 py-3.5 last:border-b-0"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-ink">{request.workspace.name}</p>
+                  <p className="truncate text-[10px] text-muted">
+                    {request.message || "Tanpa pesan"}
+                  </p>
                 </div>
-              );
-            })}
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-medium ${STATUS_STYLE[request.status]}`}
+                >
+                  {STATUS_LABEL[request.status]}
+                </span>
+              </div>
+            ))}
           </div>
         )}
       </section>
@@ -509,7 +499,11 @@ export function WorkspaceHubView() {
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>
               Batal
             </Button>
-            <Button variant="primary" onClick={handleCreate}>
+            <Button
+              variant="primary"
+              loading={createWorkspace.isPending || switchWorkspace.isPending}
+              onClick={handleCreate}
+            >
               Buat workspace
             </Button>
           </>
@@ -560,7 +554,7 @@ export function WorkspaceHubView() {
             <Button variant="ghost" onClick={() => setJoinOpen(false)}>
               Batal
             </Button>
-            <Button variant="primary" onClick={handleJoin}>
+            <Button variant="primary" loading={requestJoin.isPending} onClick={handleJoin}>
               Kirim permintaan
             </Button>
           </>
@@ -617,7 +611,12 @@ export function WorkspaceHubView() {
                   />
                 </Field>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="secondary" onClick={handleRename}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    loading={renameWorkspace.isPending}
+                    onClick={handleRename}
+                  >
                     Simpan nama
                   </Button>
                   <span className="font-mono text-[10px] text-muted">
@@ -630,61 +629,64 @@ export function WorkspaceHubView() {
             <div>
               <p className="mono-label text-muted">Anggota</p>
               <div className="mt-2 overflow-hidden rounded-2xl border border-border">
-                {manageMembers.map((membership) => {
-                  const account = accounts.find((item) => item.id === membership.userId);
-                  const isSelf = membership.userId === userId;
-                  const canRemove =
-                    membership.role !== "OWNER" &&
-                    !isSelf &&
-                    (isWorkspaceOwner(actorRole) || membership.role === "MEMBER");
-                  return (
-                    <div
-                      key={membership.id}
-                      className="flex flex-col gap-2 border-b border-border/60 px-3 py-2.5 last:border-b-0 sm:flex-row sm:items-center"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-medium text-ink">
-                          {account?.fullName ?? membership.userId}
-                          {isSelf ? " (Anda)" : ""}
-                        </p>
-                        <p className="truncate text-[10px] text-muted">
-                          {account?.email ?? "—"}
-                        </p>
+                {membersQuery.isPending ? (
+                  <div className="flex items-center justify-center px-3 py-6">
+                    <span className="size-4 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+                  </div>
+                ) : (
+                  manageMembers.map((membership) => {
+                    const isSelf = membership.userId === userId;
+                    const canRemove =
+                      membership.role !== "OWNER" &&
+                      !isSelf &&
+                      (isWorkspaceOwner(actorRole) || membership.role === "MEMBER");
+                    return (
+                      <div
+                        key={membership.id}
+                        className="flex flex-col gap-2 border-b border-border/60 px-3 py-2.5 last:border-b-0 sm:flex-row sm:items-center"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-medium text-ink">
+                            {membership.user.fullName}
+                            {isSelf ? " (Anda)" : ""}
+                          </p>
+                          <p className="truncate text-[10px] text-muted">{membership.user.email}</p>
+                        </div>
+                        <span className="w-fit rounded-full border border-border px-2 py-0.5 text-[9px] text-muted">
+                          {formatWorkspaceRole(membership.role)}
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {isWorkspaceOwner(actorRole) &&
+                          membership.role !== "OWNER" &&
+                          !isSelf ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                handleRoleChange(
+                                  membership.userId,
+                                  membership.role === "ADMIN" ? "MEMBER" : "ADMIN",
+                                )
+                              }
+                            >
+                              {membership.role === "ADMIN" ? "Jadikan member" : "Jadikan admin"}
+                            </Button>
+                          ) : null}
+                          {canRemove ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              icon={<Trash2 className="size-3.5" aria-hidden />}
+                              onClick={() => handleRemoveMember(membership.userId)}
+                            >
+                              Keluarkan
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
-                      <span className="w-fit rounded-full border border-border px-2 py-0.5 text-[9px] text-muted">
-                        {formatWorkspaceRole(membership.role)}
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {isWorkspaceOwner(actorRole) &&
-                        membership.role !== "OWNER" &&
-                        !isSelf ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() =>
-                              handleRoleChange(
-                                membership.userId,
-                                membership.role === "ADMIN" ? "MEMBER" : "ADMIN",
-                              )
-                            }
-                          >
-                            {membership.role === "ADMIN" ? "Jadikan member" : "Jadikan admin"}
-                          </Button>
-                        ) : null}
-                        {canRemove ? (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            icon={<Trash2 className="size-3.5" aria-hidden />}
-                            onClick={() => handleRemoveMember(membership.userId)}
-                          >
-                            Keluarkan
-                          </Button>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })
+                )}
               </div>
             </div>
 
@@ -692,42 +694,39 @@ export function WorkspaceHubView() {
               <div>
                 <p className="mono-label text-muted">Permintaan bergabung</p>
                 <div className="mt-2 overflow-hidden rounded-2xl border border-border">
-                  {manageRequests.map((request) => {
-                    const account = accounts.find((item) => item.id === request.userId);
-                    return (
-                      <div
-                        key={request.id}
-                        className="flex flex-col gap-2 border-b border-border/60 px-3 py-2.5 last:border-b-0 sm:flex-row sm:items-center"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-medium text-ink">
-                            {account?.fullName ?? request.userId}
-                          </p>
-                          <p className="truncate text-[10px] text-muted">
-                            {request.message || "Tanpa pesan"}
-                          </p>
-                        </div>
-                        <div className="flex gap-1.5">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            icon={<Check className="size-3.5" aria-hidden />}
-                            onClick={() => handleApprove(request.id)}
-                          >
-                            Setujui
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            icon={<X className="size-3.5" aria-hidden />}
-                            onClick={() => handleReject(request.id)}
-                          >
-                            Tolak
-                          </Button>
-                        </div>
+                  {manageRequests.map((request) => (
+                    <div
+                      key={request.id}
+                      className="flex flex-col gap-2 border-b border-border/60 px-3 py-2.5 last:border-b-0 sm:flex-row sm:items-center"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-ink">
+                          {request.user.fullName}
+                        </p>
+                        <p className="truncate text-[10px] text-muted">
+                          {request.message || "Tanpa pesan"}
+                        </p>
                       </div>
-                    );
-                  })}
+                      <div className="flex gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          icon={<Check className="size-3.5" aria-hidden />}
+                          onClick={() => handleApprove(request.id)}
+                        >
+                          Setujui
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon={<X className="size-3.5" aria-hidden />}
+                          onClick={() => handleReject(request.id)}
+                        >
+                          Tolak
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ) : null}
@@ -774,6 +773,7 @@ export function WorkspaceHubView() {
             <Button
               variant="danger"
               disabled={deleteConfirm !== deleteWorkspaceTarget?.slug}
+              loading={deleteWorkspace.isPending}
               onClick={handleDelete}
             >
               Hapus workspace

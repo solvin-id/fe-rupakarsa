@@ -5,6 +5,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   FolderKanban,
+  KeyRound,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -17,16 +18,15 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Logo } from "@rupakarsa/shared/brand";
+import { useLogoutMutation, usePublicConfigQuery, useSessionQuery } from "@rupakarsa/shared/hooks/use-session";
+import { useWorkspacesQuery } from "@rupakarsa/shared/hooks/use-workspaces";
 import { hasCmsAccess } from "@rupakarsa/shared/lib/auth";
 import { formatTokens, formatWorkspaceRole } from "@rupakarsa/shared/lib/format";
-import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
-import { useProjectStore } from "@rupakarsa/shared/stores/project-store";
-import { useSessionStore } from "@rupakarsa/shared/stores/session-store";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
-import { useWorkspaceStore } from "@rupakarsa/shared/stores/workspace-store";
 import { SurfaceSwitcher } from "@rupakarsa/shared/surface";
 import { Button, ToastViewport } from "@rupakarsa/shared/ui";
 
+import { ChangePasswordDialog } from "@/components/app/ChangePasswordDialog";
 import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
 
 const CREATOR_URL = process.env.NEXT_PUBLIC_CREATOR_URL ?? "http://localhost:3000";
@@ -44,57 +44,25 @@ function isActive(pathname: string, href: string): boolean {
 export function AppFrame({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const session = useSessionStore((state) => state.session);
-  const hydrated = useSessionStore((state) => state.hydrated);
-  const hydrateSession = useSessionStore((state) => state.hydrate);
-  const refreshAccess = useSessionStore((state) => state.refreshAccess);
-  const signOut = useSessionStore((state) => state.signOut);
-  const hydrateProjects = useProjectStore((state) => state.hydrate);
-  const hydrateAdmin = useAdminStore((state) => state.hydrate);
-  const hydrateWorkspaces = useWorkspaceStore((state) => state.hydrate);
-  const workspaceHydrated = useWorkspaceStore((state) => state.hydrated);
-  const workspaces = useWorkspaceStore((state) => state.workspaces);
-  const memberships = useWorkspaceStore((state) => state.memberships);
+
+  const sessionQuery = useSessionQuery();
+  const workspacesQuery = useWorkspacesQuery();
+  const configQuery = usePublicConfigQuery();
+  const logout = useLogoutMutation();
   const pushToast = useUiStore((state) => state.pushToast);
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
+
+  const session = sessionQuery.data ?? null;
+  const signedOut = sessionQuery.isError || sessionQuery.data === null;
 
   useEffect(() => {
-    hydrateAdmin();
-    hydrateWorkspaces();
-    hydrateSession();
-    hydrateProjects();
-    refreshAccess();
-  }, [
-    hydrateAdmin,
-    hydrateWorkspaces,
-    hydrateSession,
-    hydrateProjects,
-    refreshAccess,
-  ]);
+    if (!signedOut) return;
+    router.replace("/login");
+  }, [signedOut, router]);
 
-  useEffect(() => {
-    function syncPlatform(): void {
-      useWorkspaceStore.getState().refresh();
-      useAdminStore.getState().refreshAccounts();
-      useSessionStore.getState().refreshAccess();
-    }
-    function handleVisibility(): void {
-      if (document.visibilityState === "visible") syncPlatform();
-    }
-    window.addEventListener("focus", syncPlatform);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      window.removeEventListener("focus", syncPlatform);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (hydrated && !session) router.replace("/login");
-  }, [hydrated, session, router]);
-
-  if (!hydrated || !workspaceHydrated || !session) {
+  if (sessionQuery.isPending || workspacesQuery.isPending || !session) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-canvas">
         <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -104,18 +72,20 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
 
   const user = session.user;
   const workspace = session.workspace;
-  const workspaceRole =
-    memberships.find(
-      (membership) => membership.workspaceId === workspace.id && membership.userId === user.id,
-    )?.role ?? null;
-  const myMemberships = memberships.filter((membership) => membership.userId === user.id);
+  const memberships = workspacesQuery.data?.memberships ?? session.memberships;
+  const workspaces = workspacesQuery.data?.workspaces ?? session.workspaces;
+  const workspaceRole = session.activeWorkspaceRole;
   const canOpenCms = hasCmsAccess(user);
   const balance = workspace.tokenBalance;
   const planQuota = workspace.freePlanRemaining;
+  const packageTokens = configQuery.data?.pricing.packageTokens ?? 4000;
 
   function handleSignOut(): void {
-    signOut();
-    router.replace("/login");
+    logout.mutate(undefined, {
+      onSuccess: () => {
+        router.replace("/login");
+      },
+    });
   }
 
   function handleTopUp(): void {
@@ -140,7 +110,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 </Button>
               </a>
             ) : null}
-            <Button variant="primary" onClick={handleSignOut}>
+            <Button variant="primary" loading={logout.isPending} onClick={handleSignOut}>
               Keluar
             </Button>
           </div>
@@ -169,9 +139,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
           <span className="truncate">{workspace.name}</span>
           <span
             className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium ${
-              workspace.isActive
-                ? "bg-accent-3-soft text-[#3f6212]"
-                : "bg-danger/10 text-danger"
+              workspace.isActive ? "bg-accent-3-soft text-[#3f6212]" : "bg-danger/10 text-danger"
             }`}
           >
             {workspace.isActive ? "Aktif" : "Nonaktif"}
@@ -180,14 +148,12 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         <p className="mt-0.5 truncate font-mono text-[10px] text-muted">{workspace.slug}</p>
         <p className="mt-1 text-[10px] text-muted">
           Role Anda:{" "}
-          <span className="font-medium text-ink">
-            {workspaceRole ? formatWorkspaceRole(workspaceRole) : "—"}
-          </span>
+          <span className="font-medium text-ink">{formatWorkspaceRole(workspaceRole)}</span>
         </p>
         <div className="mt-2.5">
           <WorkspaceSwitcher
             activeWorkspace={workspace}
-            memberships={myMemberships}
+            memberships={memberships}
             workspaces={workspaces}
           />
         </div>
@@ -236,7 +202,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink/10">
           <div
             className="h-full rounded-full bg-accent"
-            style={{ width: `${Math.min(100, (balance / 4000) * 100)}%` }}
+            style={{ width: `${Math.min(100, (balance / packageTokens) * 100)}%` }}
           />
         </div>
         <p className="mt-2 text-[10px] text-muted">
@@ -262,6 +228,14 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
             <p className="truncate text-xs font-medium text-ink">{user.fullName}</p>
             <p className="truncate text-[10px] text-muted">{user.email}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setPasswordOpen(true)}
+            aria-label="Ubah password"
+            className="flex size-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-ink/5 hover:text-ink"
+          >
+            <KeyRound className="size-3.5" aria-hidden />
+          </button>
           <button
             type="button"
             onClick={handleSignOut}
@@ -318,7 +292,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2">
               <span className="hidden items-center gap-1.5 rounded-full border border-border bg-white/60 px-3 py-1.5 text-[11px] text-muted sm:inline-flex">
                 <span className="size-1.5 rounded-full bg-success" aria-hidden />
-                {workspaceRole ? formatWorkspaceRole(workspaceRole) : "Member"}
+                {formatWorkspaceRole(workspaceRole)}
               </span>
               <button
                 type="button"
@@ -335,6 +309,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
         <main className="mx-auto w-full max-w-7xl px-4 pb-16 pt-6 sm:px-6 lg:px-8">{children}</main>
       </div>
 
+      <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
       <ToastViewport />
     </div>
   );

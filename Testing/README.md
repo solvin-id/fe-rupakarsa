@@ -4,7 +4,7 @@ Folder ini menampung tes unit frontend, terpisah dari kode produksi.
 
 ```
 Testing/
-└── Shared/    # tes paket @rupakarsa/shared (auth, token, plan, store, cookie) — jsdom
+└── Shared/    # tes paket @rupakarsa/shared (API client, token, media, WhatsApp, kartu generasi) — jsdom
 ```
 
 Tes backend berada di repo terpisah (`rupakarsa-backend/tests/`).
@@ -16,20 +16,20 @@ Tes backend berada di repo terpisah (`rupakarsa-backend/tests/`).
 npm test
 ```
 
-`vitest.config.ts` di root mengarahkan `include` ke `Testing/Shared/**/*.test.ts` dan alias
-`@rupakarsa/shared` ke `packages/shared/src`.
+`vitest.config.ts` di root mengarahkan `include` ke `Testing/Shared/**/*.test.{ts,tsx}`, mengalias
+`@rupakarsa/shared` ke `packages/shared/src`, dan `@/` ke `apps/creator/src`.
 
 ## Cakupan
 
-- `auth.test.ts` — aturan akses Creator vs CMS (`hasCmsAccess`, `authorizeSignIn`), helper role workspace.
-- `tokens.test.ts` — tarif token, kuota Plan Mode, kapasitas render.
-- `plan.test.ts` — struktur Plan Blueprint video/gambar.
-- `stores.test.ts` — sesi per workspace, saldo/plan per workspace, grant/revoke akses CMS, provisi akun, CRUD folder.
-- `workspaces.test.ts` — registry workspace: create, join request, approve/reject, role, remove, leave, delete.
-- `cookies.test.ts` — round-trip cookie akun, registry workspace (chunked), dan pointer sesi.
-- `contact.test.ts` — normalisasi nomor WhatsApp admin dan pembentukan link `wa.me`.
+- `api-client.test.ts` — `apiRequest`: cookie `include`, header JSON pada POST, 204 → `undefined`,
+  `{ error: { message } }` → `ApiError`, kegagalan jaringan → status 0.
+- `tokens.test.ts` — tarif token model, kapasitas render, dan format Rupiah berbasis rate.
+- `media.test.ts` — `isVideoUrl` untuk hasil render video vs gambar.
+- `whatsapp.test.ts` — normalisasi nomor WhatsApp admin dan pembentukan link `wa.me`.
+- `generation-card.test.tsx` — kartu riwayat merender poster asli saat `outputUrl` ada, dan
+  fallback gradient saat belum ada hasil.
 
 ## Aturan
 
-- Tes tidak boleh memanggil provider sungguhan.
-- Jangan menaruh fixture biner besar; gunakan data URL pendek atau mock.
+- Tes tidak boleh memanggil provider atau API sungguhan; `fetch` selalu di-stub.
+- Jangan menaruh fixture biner besar; gunakan data pendek atau URL palsu.

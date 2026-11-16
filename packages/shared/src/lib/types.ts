@@ -5,9 +5,6 @@ export type MediaType = "VIDEO" | "IMAGE";
 export type GenerationStatus = "QUEUED" | "RENDERING" | "COMPLETED" | "FAILED";
 export type ProviderCode = string;
 
-export type ActionResult = { ok: true } | { ok: false; message: string };
-export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
-
 export interface Workspace {
   id: string;
   name: string;
@@ -37,15 +34,9 @@ export interface WorkspaceJoinRequest {
   resolvedByUserId: string | null;
 }
 
-export interface WorkspaceRegistry {
-  workspaces: Workspace[];
-  memberships: WorkspaceMembership[];
-  requests: WorkspaceJoinRequest[];
-}
-
 export interface User {
   id: string;
-  defaultWorkspaceId: string;
+  defaultWorkspaceId: string | null;
   email: string;
   fullName: string;
   role: Role;
@@ -54,26 +45,53 @@ export interface User {
   createdAt: string;
 }
 
-export interface Session {
+export interface SessionPayload {
   user: User;
   workspace: Workspace;
-  signedInAt: string;
+  memberships: WorkspaceMembership[];
+  workspaces: Workspace[];
+  activeWorkspaceRole: WorkspaceRole;
 }
 
-export interface SessionCookie {
-  userId: string;
-  workspaceId: string;
-  signedInAt: string;
+export interface UserSummary {
+  id: string;
+  fullName: string;
+  email: string;
+}
+
+export interface WorkspaceMemberSummary extends WorkspaceMembership {
+  user: UserSummary;
+}
+
+export interface WorkspaceRequestSummary extends WorkspaceJoinRequest {
+  user: UserSummary;
+}
+
+export interface MyJoinRequest extends WorkspaceJoinRequest {
+  workspace: { id: string; name: string; slug: string };
+}
+
+export interface WorkspacesPayload {
+  workspaces: Workspace[];
+  memberships: WorkspaceMembership[];
+  manageableRequests: WorkspaceRequestSummary[];
+  myRequests: MyJoinRequest[];
 }
 
 export interface Folder {
   id: string;
   workspaceId: string;
-  userId: string;
+  userId: string | null;
   name: string;
   description: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface FolderWithStats extends Folder {
+  videoCount: number;
+  imageCount: number;
+  tokensUsed: number;
 }
 
 export interface GenerationParams {
@@ -86,8 +104,8 @@ export interface Generation {
   id: string;
   workspaceId: string;
   folderId: string;
-  userId: string;
-  modelId: string;
+  userId: string | null;
+  modelId: string | null;
   modelName: string;
   mediaType: MediaType;
   rawPrompt: string;
@@ -137,18 +155,52 @@ export interface PlanBlueprint {
   negativePrompt: string;
 }
 
-export interface DemoAccount {
+export interface ModelTemplate {
+  providerCode: string;
+  code: string;
+  displayName: string;
+  mediaType: MediaType;
+  allowedParams: ModelAllowedParams;
+  tokenCost: number;
+}
+
+export interface AdminContact {
+  name: string;
+  whatsapp: string;
   email: string;
-  password: string;
-  userId: string;
 }
 
-export interface WorkspaceSnapshot {
-  folders: Folder[];
-  generations: Generation[];
+export interface Pricing {
+  tokenValueRupiah: number;
+  packageTokens: number;
+  packagePlanQuota: number;
+  planModeTokenCost: number;
 }
 
-export interface CatalogSnapshot {
-  providers: AiProvider[];
-  models: AiModel[];
+export interface PublicConfig {
+  contact: AdminContact;
+  pricing: Pricing;
+  features: { simulation: boolean };
+}
+
+export interface PlanResponse {
+  blueprint: PlanBlueprint;
+  cost: { tokens: number; usesFreeQuota: boolean };
+  workspace: Workspace;
+}
+
+export interface CreatedGeneration {
+  generation: Generation;
+  workspace: Workspace;
+}
+
+export interface UploadedAsset {
+  url: string;
+  mime: string;
+  size: number;
+}
+
+export interface AdminWorkspacesPayload {
+  workspaces: Workspace[];
+  memberships: WorkspaceMemberSummary[];
 }

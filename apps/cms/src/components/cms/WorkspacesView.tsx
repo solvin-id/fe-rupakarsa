@@ -3,22 +3,25 @@
 import { Building2, CircleDollarSign, Plus, ShieldCheck, Users } from "lucide-react";
 import { useState } from "react";
 
+import {
+  useAdminAccountsQuery,
+  useAdminWorkspacesQuery,
+  useCreateAdminWorkspaceMutation,
+  useTopUpWorkspaceMutation,
+  useUpdateAdminWorkspaceMutation,
+} from "@rupakarsa/shared/hooks/use-admin";
 import { formatDate, formatTokens } from "@rupakarsa/shared/lib/format";
 import { slugify } from "@rupakarsa/shared/lib/slug";
 import type { Workspace } from "@rupakarsa/shared/lib/types";
-import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
-import { useWorkspaceStore } from "@rupakarsa/shared/stores/workspace-store";
 import { Button, Dialog, Field, Select, TextInput } from "@rupakarsa/shared/ui";
 
 export function WorkspacesView() {
-  const workspaces = useWorkspaceStore((state) => state.workspaces);
-  const memberships = useWorkspaceStore((state) => state.memberships);
-  const workspaceHydrated = useWorkspaceStore((state) => state.hydrated);
-  const createWorkspace = useWorkspaceStore((state) => state.createWorkspace);
-  const updateWorkspace = useWorkspaceStore((state) => state.updateWorkspace);
-  const accounts = useAdminStore((state) => state.accounts);
-  const adminHydrated = useAdminStore((state) => state.hydrated);
+  const workspacesQuery = useAdminWorkspacesQuery();
+  const accountsQuery = useAdminAccountsQuery();
+  const createWorkspace = useCreateAdminWorkspaceMutation();
+  const updateWorkspace = useUpdateAdminWorkspaceMutation();
+  const topUp = useTopUpWorkspaceMutation();
   const pushToast = useUiStore((state) => state.pushToast);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -35,6 +38,10 @@ export function WorkspacesView() {
   const [topUpAmount, setTopUpAmount] = useState("1000");
   const [topUpPlan, setTopUpPlan] = useState("50");
 
+  const workspaces = workspacesQuery.data?.workspaces ?? [];
+  const memberships = workspacesQuery.data?.memberships ?? [];
+  const accounts = accountsQuery.data ?? [];
+
   const activeCount = workspaces.filter((workspace) => workspace.isActive).length;
   const totalTokens = workspaces.reduce((total, workspace) => total + workspace.tokenBalance, 0);
   const totalPlan = workspaces.reduce(
@@ -46,11 +53,7 @@ export function WorkspacesView() {
     const ownerMembership = memberships.find(
       (membership) => membership.workspaceId === workspaceId && membership.role === "OWNER",
     );
-    if (!ownerMembership) return "—";
-    return (
-      accounts.find((account) => account.id === ownerMembership.userId)?.fullName ??
-      ownerMembership.userId
-    );
+    return ownerMembership?.user.fullName ?? "—";
   }
 
   function memberCount(workspaceId: string): number {
@@ -69,12 +72,18 @@ export function WorkspacesView() {
   }
 
   function handleCreate(): void {
-    if (draftName.trim().length < 2) {
+    const name = draftName.trim();
+    if (name.length < 2) {
       pushToast("error", "Nama workspace minimal 2 karakter.");
       return;
     }
     if (!draftOwnerId) {
       pushToast("error", "Pilih owner workspace.");
+      return;
+    }
+    const slug = (slugTouched ? draftSlug : slugify(name)).trim();
+    if (slug.length < 2) {
+      pushToast("error", "Slug workspace minimal 2 karakter.");
       return;
     }
     const tokens = Number(draftTokens);
@@ -84,20 +93,23 @@ export function WorkspacesView() {
       return;
     }
 
-    const created = createWorkspace({
-      name: draftName,
-      slug: slugTouched ? draftSlug : undefined,
-      ownerId: draftOwnerId,
-      tokenBalance: Math.round(tokens),
-      freePlanRemaining: Math.round(plan),
-      isActive: draftActive,
-    });
-    if (!created.ok) {
-      pushToast("error", created.message);
-      return;
-    }
-    setCreateOpen(false);
-    pushToast("success", `Workspace ${created.value.name} ditambahkan.`);
+    createWorkspace.mutate(
+      {
+        name,
+        slug,
+        ownerId: draftOwnerId,
+        tokenBalance: Math.round(tokens),
+        freePlanRemaining: Math.round(plan),
+        isActive: draftActive,
+      },
+      {
+        onSuccess: (workspace) => {
+          setCreateOpen(false);
+          pushToast("success", `Workspace ${workspace.name} ditambahkan.`);
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
   }
 
   function openTopUp(workspace: Workspace): void {
@@ -114,31 +126,38 @@ export function WorkspacesView() {
       pushToast("error", "Jumlah token harus lebih dari 0.");
       return;
     }
-    const updated = updateWorkspace(topUpTarget.id, {
-      tokenBalance: topUpTarget.tokenBalance + Math.round(amount),
-      freePlanRemaining: topUpTarget.freePlanRemaining + Math.max(0, Math.round(plan) || 0),
-    });
-    if (!updated.ok) {
-      pushToast("error", updated.message);
+    if (!Number.isFinite(plan) || plan < 0) {
+      pushToast("error", "Plan gratis tidak boleh negatif.");
       return;
     }
-    setTopUpTarget(null);
-    pushToast("success", `Top-up ${formatTokens(Math.round(amount))} token berhasil.`);
-  }
 
-  function handleToggle(workspace: Workspace): void {
-    const updated = updateWorkspace(workspace.id, { isActive: !workspace.isActive });
-    if (!updated.ok) {
-      pushToast("error", updated.message);
-      return;
-    }
-    pushToast(
-      "success",
-      `${workspace.name} ${updated.value.isActive ? "diaktifkan" : "dinonaktifkan"}.`,
+    topUp.mutate(
+      { workspaceId: topUpTarget.id, tokens: Math.round(amount), plan: Math.round(plan) },
+      {
+        onSuccess: () => {
+          setTopUpTarget(null);
+          pushToast("success", `Top-up ${formatTokens(Math.round(amount))} token berhasil.`);
+        },
+        onError: (error) => pushToast("error", error.message),
+      },
     );
   }
 
-  if (!workspaceHydrated || !adminHydrated) {
+  function handleToggle(workspace: Workspace): void {
+    updateWorkspace.mutate(
+      { workspaceId: workspace.id, isActive: !workspace.isActive },
+      {
+        onSuccess: (updated) =>
+          pushToast(
+            "success",
+            `${updated.name} ${updated.isActive ? "diaktifkan" : "dinonaktifkan"}.`,
+          ),
+        onError: (error) => pushToast("error", error.message),
+      },
+    );
+  }
+
+  if (workspacesQuery.isPending || accountsQuery.isPending) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -287,7 +306,7 @@ export function WorkspacesView() {
             <Button variant="ghost" onClick={() => setCreateOpen(false)}>
               Batal
             </Button>
-            <Button variant="primary" onClick={handleCreate}>
+            <Button variant="primary" loading={createWorkspace.isPending} onClick={handleCreate}>
               Tambah workspace
             </Button>
           </>
@@ -380,7 +399,7 @@ export function WorkspacesView() {
             <Button variant="ghost" onClick={() => setTopUpTarget(null)}>
               Batal
             </Button>
-            <Button variant="primary" onClick={handleTopUp}>
+            <Button variant="primary" loading={topUp.isPending} onClick={handleTopUp}>
               Top up
             </Button>
           </>

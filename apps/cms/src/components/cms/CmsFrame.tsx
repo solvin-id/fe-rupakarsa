@@ -18,11 +18,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Logo } from "@rupakarsa/shared/brand";
+import { useAdminWorkspacesQuery } from "@rupakarsa/shared/hooks/use-admin";
+import { useLogoutMutation, useSessionQuery } from "@rupakarsa/shared/hooks/use-session";
 import { hasCmsAccess } from "@rupakarsa/shared/lib/auth";
 import { formatTokens } from "@rupakarsa/shared/lib/format";
-import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
-import { useSessionStore } from "@rupakarsa/shared/stores/session-store";
-import { useWorkspaceStore } from "@rupakarsa/shared/stores/workspace-store";
 import { SurfaceSwitcher } from "@rupakarsa/shared/surface";
 import { Button, ToastViewport } from "@rupakarsa/shared/ui";
 
@@ -45,56 +44,21 @@ function isActive(pathname: string, href: string): boolean {
 export function CmsFrame({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const session = useSessionStore((state) => state.session);
-  const hydrated = useSessionStore((state) => state.hydrated);
-  const hydrateSession = useSessionStore((state) => state.hydrate);
-  const refreshAccess = useSessionStore((state) => state.refreshAccess);
-  const signOut = useSessionStore((state) => state.signOut);
-  const hydrateAdmin = useAdminStore((state) => state.hydrate);
-  const adminHydrated = useAdminStore((state) => state.hydrated);
-  const hydrateWorkspaces = useWorkspaceStore((state) => state.hydrate);
-  const workspaceHydrated = useWorkspaceStore((state) => state.hydrated);
-  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const sessionQuery = useSessionQuery();
+  const workspacesQuery = useAdminWorkspacesQuery();
+  const logout = useLogoutMutation();
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  useEffect(() => {
-    hydrateAdmin();
-    hydrateWorkspaces();
-    hydrateSession();
-    refreshAccess();
-  }, [hydrateAdmin, hydrateWorkspaces, hydrateSession, refreshAccess]);
+  const session = sessionQuery.data ?? null;
+  const signedOut = sessionQuery.isError || sessionQuery.data === null;
 
   useEffect(() => {
-    function syncPlatform(): void {
-      useWorkspaceStore.getState().refresh();
-      useAdminStore.getState().refreshAccounts();
-      useSessionStore.getState().refreshAccess();
-    }
-    function handleVisibility(): void {
-      if (document.visibilityState === "visible") syncPlatform();
-    }
-    window.addEventListener("focus", syncPlatform);
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      window.removeEventListener("focus", syncPlatform);
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, []);
+    if (!signedOut) return;
+    router.replace("/login");
+  }, [signedOut, router]);
 
-  useEffect(() => {
-    if (hydrated && !session) router.replace("/login");
-  }, [hydrated, session, router]);
-
-  if (!hydrated || !adminHydrated || !workspaceHydrated) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas">
-        <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
-      </div>
-    );
-  }
-
-  if (!session) {
+  if (sessionQuery.isPending || workspacesQuery.isPending || !session) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-canvas">
         <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -104,11 +68,15 @@ export function CmsFrame({ children }: { children: React.ReactNode }) {
 
   const user = session.user;
   const allowed = hasCmsAccess(user);
+  const workspaces = workspacesQuery.data?.workspaces ?? [];
   const activeWorkspaces = workspaces.filter((workspace) => workspace.isActive).length;
 
   function handleSignOut(): void {
-    signOut();
-    router.replace("/login");
+    logout.mutate(undefined, {
+      onSuccess: () => {
+        router.replace("/login");
+      },
+    });
   }
 
   const sidebar = (
