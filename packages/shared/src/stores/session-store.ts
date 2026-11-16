@@ -2,53 +2,50 @@
 
 import { create } from "zustand";
 
+import { readAccountsCookie } from "../lib/accounts-cookie";
 import { authorizeSignIn } from "../lib/auth";
-import { hasCmsAccessOverride } from "../lib/cms-access-cookie";
-import { DEMO_ACCOUNTS, SEED_TENANTS, SEED_USERS } from "../lib/seed";
+import { removeLegacyCookies } from "../lib/cookies";
+import { ensurePlatformSeeded } from "../lib/platform-seed";
+import { DEMO_PASSWORD } from "../lib/seed";
 import { clearSessionCookie, readSessionCookie, writeSessionCookie } from "../lib/session-cookie";
-import { readJson, removeKey, STORAGE_KEYS, writeJson } from "../lib/storage";
-import { readTenantWallet, upsertTenantWallet } from "../lib/tenant-wallet-cookie";
-import type { AdminSnapshot, Session, Tenant, User } from "../lib/types";
+import { cleanupLegacyStorage } from "../lib/storage";
+import type { Session, SessionCookie, User, Workspace } from "../lib/types";
+import { readWorkspaceRegistry } from "../lib/workspaces-cookie";
+import { useWorkspaceStore } from "./workspace-store";
 
-function currentUsers(): User[] {
-  const snapshot = readJson<AdminSnapshot | null>(STORAGE_KEYS.admin, null);
-  return snapshot?.users ?? SEED_USERS;
-}
+const NO_WORKSPACE_MESSAGE = "Akun ini belum memiliki workspace. Hubungi Superadmin Rupakarsa.";
 
-function currentTenants(): Tenant[] {
-  const snapshot = readJson<AdminSnapshot | null>(STORAGE_KEYS.admin, null);
-  return snapshot?.tenants ?? SEED_TENANTS;
-}
+function resolveSession(cookie: SessionCookie): Session | null {
+  const accounts = readAccountsCookie() ?? [];
+  const registry = readWorkspaceRegistry();
+  if (!registry) return null;
 
-function persistTenantBalance(
-  tenantId: string,
-  tokenBalance: number,
-  freePlanRemaining: number,
-): void {
-  const snapshot = readJson<AdminSnapshot | null>(STORAGE_KEYS.admin, null);
-  if (!snapshot?.tenants) return;
-  const tenants = snapshot.tenants.map((tenant) =>
-    tenant.id === tenantId ? { ...tenant, tokenBalance, freePlanRemaining } : tenant,
-  );
-  writeJson(STORAGE_KEYS.admin, { ...snapshot, tenants });
-}
+  const account = accounts.find((item) => item.id === cookie.userId);
+  if (!account || !account.isActive) return null;
 
-function persist(session: Session | null): void {
-  if (session) {
-    writeSessionCookie(session);
-  } else {
-    clearSessionCookie();
+  const memberships = registry.memberships.filter((item) => item.userId === account.id);
+  if (memberships.length === 0) return null;
+
+  const memberWorkspaceIds = memberships.map((membership) => membership.workspaceId);
+  const orderedIds: string[] = [];
+  for (const id of [cookie.workspaceId, account.defaultWorkspaceId, ...memberWorkspaceIds]) {
+    if (memberWorkspaceIds.includes(id) && !orderedIds.includes(id)) orderedIds.push(id);
   }
+  const candidates = orderedIds
+    .map((id) => registry.workspaces.find((workspace) => workspace.id === id))
+    .filter((workspace): workspace is Workspace => Boolean(workspace));
+  const workspace = candidates.find((item) => item.isActive) ?? candidates[0];
+  if (!workspace) return null;
+
+  return { user: account, workspace, signedInAt: cookie.signedInAt };
 }
 
-function resolveTenant(session: Session): Session | null {
-  const base =
-    session.tenant ??
-    currentTenants().find((item) => item.id === session.user.tenantId) ??
-    currentTenants()[0];
-  if (!base) return null;
-  const wallet = readTenantWallet(base.id);
-  return { ...session, tenant: wallet ? { ...base, ...wallet } : base };
+function persistSession(session: Session): void {
+  writeSessionCookie({
+    userId: session.user.id,
+    workspaceId: session.workspace.id,
+    signedInAt: session.signedInAt,
+  });
 }
 
 interface SessionState {
@@ -59,10 +56,11 @@ interface SessionState {
   refreshAccess: () => void;
   signIn: (email: string, password: string) => boolean;
   signOut: () => void;
+  switchWorkspace: (workspaceId: string) => boolean;
   adjustTokens: (delta: number) => void;
   consumePlanQuota: () => { tokens: number; usesFreeQuota: boolean };
-  updateUser: (userId: string, patch: Partial<User>) => void;
-  updateTenant: (tenantId: string, patch: Partial<Tenant>) => void;
+  updateUser: (patch: Partial<User>) => void;
+  updateWorkspace: (patch: Partial<Workspace>) => void;
 }
 
 export const useSessionStore = create<SessionState>()((set, get) => ({
@@ -71,60 +69,58 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
   errorMessage: null,
 
   hydrate: () => {
-    let session = readSessionCookie();
+    cleanupLegacyStorage();
+    removeLegacyCookies();
+    ensurePlatformSeeded();
 
-    if (!session) {
-      const legacy =
-        readJson<Session | null>(STORAGE_KEYS.sessionCreator, null) ??
-        readJson<Session | null>(STORAGE_KEYS.sessionCms, null);
-      if (legacy?.user?.email) {
-        session = legacy;
-      }
+    const cookie = readSessionCookie();
+    if (!cookie) {
+      set({ session: null, hydrated: true });
+      return;
     }
 
-    removeKey(STORAGE_KEYS.sessionCreator);
-    removeKey(STORAGE_KEYS.sessionCms);
+    const resolved = resolveSession(cookie);
+    if (!resolved) {
+      clearSessionCookie();
+      set({
+        session: null,
+        hydrated: true,
+        errorMessage: "Sesi berakhir. Silakan masuk kembali.",
+      });
+      return;
+    }
 
-    const resolved = session ? resolveTenant(session) : null;
-    if (resolved) writeSessionCookie(resolved);
-    set({ session: resolved, hydrated: true });
+    persistSession(resolved);
+    set({ session: resolved, hydrated: true, errorMessage: null });
   },
 
   refreshAccess: () => {
     const session = get().session;
     if (!session) return;
 
-    const current = currentUsers().find((item) => item.id === session.user.id);
-    const cmsAccess = current
-      ? current.cmsAccess || hasCmsAccessOverride(current.id)
-      : session.user.cmsAccess || hasCmsAccessOverride(session.user.id);
-    const baseTenant =
-      currentTenants().find((item) => item.id === session.tenant.id) ?? session.tenant;
-    const wallet = readTenantWallet(baseTenant.id);
-    const tenant = wallet ? { ...baseTenant, ...wallet } : baseTenant;
-
-    if (
-      cmsAccess === session.user.cmsAccess &&
-      tenant.tokenBalance === session.tenant.tokenBalance &&
-      tenant.freePlanRemaining === session.tenant.freePlanRemaining &&
-      tenant.isActive === session.tenant.isActive
-    ) {
+    ensurePlatformSeeded();
+    const cookie = readSessionCookie();
+    if (!cookie) {
+      set({ session: null });
       return;
     }
 
-    const next: Session = {
-      ...session,
-      user: { ...session.user, cmsAccess },
-      tenant,
-    };
-    persist(next);
-    set({ session: next });
+    const resolved = resolveSession(cookie);
+    if (!resolved) {
+      clearSessionCookie();
+      set({ session: null });
+      return;
+    }
+
+    persistSession(resolved);
+    set({ session: resolved });
   },
 
   signIn: (email, password) => {
+    ensurePlatformSeeded();
     const normalized = email.trim().toLowerCase();
-    const account = DEMO_ACCOUNTS.find((item) => item.email === normalized);
-    if (!account || account.password !== password) {
+    const account = (readAccountsCookie() ?? []).find((item) => item.email === normalized);
+    if (!account || password !== DEMO_PASSWORD) {
       set({
         errorMessage:
           "Akun tidak ditemukan atau password salah. Akun dibuat oleh Superadmin Rupakarsa.",
@@ -132,106 +128,95 @@ export const useSessionStore = create<SessionState>()((set, get) => ({
       return false;
     }
 
-    const user = currentUsers().find((item) => item.id === account.userId);
-    if (!user) {
-      set({ errorMessage: "Akun tidak ditemukan. Hubungi Superadmin Rupakarsa." });
-      return false;
-    }
-
-    const baseTenant = currentTenants().find((item) => item.id === user.tenantId);
-    const wallet = baseTenant ? readTenantWallet(baseTenant.id) : null;
-    const tenant = baseTenant && wallet ? { ...baseTenant, ...wallet } : baseTenant;
-    if (!tenant || !tenant.isActive) {
-      set({ errorMessage: "Tenant akun ini tidak aktif. Hubungi Superadmin Rupakarsa." });
-      return false;
-    }
-
-    const authorization = authorizeSignIn(user);
+    const authorization = authorizeSignIn(account);
     if (!authorization.ok) {
       set({ errorMessage: authorization.message });
       return false;
     }
 
-    const resolved: User = {
-      ...user,
-      cmsAccess: user.cmsAccess || hasCmsAccessOverride(user.id),
-    };
-    const session: Session = { user: resolved, tenant, signedInAt: new Date().toISOString() };
-    persist(session);
-    set({ session, errorMessage: null });
+    const signedInAt = new Date().toISOString();
+    const resolved = resolveSession({
+      userId: account.id,
+      workspaceId: account.defaultWorkspaceId,
+      signedInAt,
+    });
+    if (!resolved) {
+      set({ errorMessage: NO_WORKSPACE_MESSAGE });
+      return false;
+    }
+
+    persistSession(resolved);
+    set({ session: resolved, errorMessage: null });
     return true;
   },
 
   signOut: () => {
-    persist(null);
+    clearSessionCookie();
     set({ session: null, errorMessage: null });
+  },
+
+  switchWorkspace: (workspaceId) => {
+    const session = get().session;
+    if (!session) return false;
+
+    const registry = readWorkspaceRegistry();
+    if (!registry) return false;
+
+    const membership = registry.memberships.find(
+      (item) => item.workspaceId === workspaceId && item.userId === session.user.id,
+    );
+    const workspace = registry.workspaces.find((item) => item.id === workspaceId);
+    if (!membership || !workspace || !workspace.isActive) return false;
+
+    const next: Session = { ...session, workspace };
+    persistSession(next);
+    set({ session: next });
+    return true;
   },
 
   adjustTokens: (delta) => {
     const session = get().session;
     if (!session) return;
-    const tokenBalance = Math.max(0, session.tenant.tokenBalance + delta);
-    const next: Session = {
-      ...session,
-      tenant: { ...session.tenant, tokenBalance },
-    };
-    persist(next);
-    set({ session: next });
-    persistTenantBalance(session.tenant.id, tokenBalance, session.tenant.freePlanRemaining);
-    upsertTenantWallet(session.tenant.id, {
-      tokenBalance,
-      freePlanRemaining: session.tenant.freePlanRemaining,
-      isActive: session.tenant.isActive,
+
+    const updated = useWorkspaceStore.getState().updateWorkspace(session.workspace.id, {
+      tokenBalance: Math.max(0, session.workspace.tokenBalance + delta),
     });
+    if (updated.ok) set({ session: { ...session, workspace: updated.value } });
   },
 
   consumePlanQuota: () => {
     const session = get().session;
     if (!session) return { tokens: 0, usesFreeQuota: false };
 
-    if (session.tenant.freePlanRemaining > 0) {
-      const freePlanRemaining = session.tenant.freePlanRemaining - 1;
-      const next: Session = {
-        ...session,
-        tenant: { ...session.tenant, freePlanRemaining },
-      };
-      persist(next);
-      set({ session: next });
-      persistTenantBalance(session.tenant.id, session.tenant.tokenBalance, freePlanRemaining);
-      upsertTenantWallet(session.tenant.id, {
-        tokenBalance: session.tenant.tokenBalance,
-        freePlanRemaining,
-        isActive: session.tenant.isActive,
-      });
+    const { workspace } = session;
+    if (workspace.freePlanRemaining > 0) {
+      const updated = useWorkspaceStore
+        .getState()
+        .updateWorkspace(workspace.id, { freePlanRemaining: workspace.freePlanRemaining - 1 });
+      if (!updated.ok) return { tokens: 0, usesFreeQuota: false };
+      set({ session: { ...session, workspace: updated.value } });
       return { tokens: 0, usesFreeQuota: true };
     }
 
-    if (session.tenant.tokenBalance < 1) {
-      return { tokens: 0, usesFreeQuota: false };
-    }
+    if (workspace.tokenBalance < 1) return { tokens: 0, usesFreeQuota: false };
 
-    get().adjustTokens(-1);
+    const updated = useWorkspaceStore
+      .getState()
+      .updateWorkspace(workspace.id, { tokenBalance: workspace.tokenBalance - 1 });
+    if (!updated.ok) return { tokens: 0, usesFreeQuota: false };
+    set({ session: { ...session, workspace: updated.value } });
     return { tokens: 1, usesFreeQuota: false };
   },
 
-  updateUser: (userId, patch) => {
+  updateUser: (patch) => {
     const session = get().session;
-    if (!session || session.user.id !== userId) return;
-    const next: Session = { ...session, user: { ...session.user, ...patch } };
-    persist(next);
-    set({ session: next });
+    if (!session) return;
+    set({ session: { ...session, user: { ...session.user, ...patch } } });
   },
 
-  updateTenant: (tenantId, patch) => {
+  updateWorkspace: (patch) => {
     const session = get().session;
-    if (!session || session.tenant.id !== tenantId) return;
-    const next: Session = { ...session, tenant: { ...session.tenant, ...patch } };
-    persist(next);
-    set({ session: next });
-    upsertTenantWallet(tenantId, {
-      tokenBalance: next.tenant.tokenBalance,
-      freePlanRemaining: next.tenant.freePlanRemaining,
-      isActive: next.tenant.isActive,
-    });
+    if (!session) return;
+    set({ session: { ...session, workspace: { ...session.workspace, ...patch } } });
   },
 }));

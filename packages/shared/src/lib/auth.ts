@@ -1,7 +1,15 @@
-import type { User } from "./types";
+import type { User, WorkspaceRole } from "./types";
 
 export function isActiveUser(user: User | null | undefined): user is User {
   return Boolean(user?.isActive);
+}
+
+export function isWorkspaceOwner(role: WorkspaceRole | null | undefined): boolean {
+  return role === "OWNER";
+}
+
+export function canManageWorkspace(role: WorkspaceRole | null | undefined): boolean {
+  return role === "OWNER" || role === "ADMIN";
 }
 
 export function hasCmsAccess(user: User | null | undefined): boolean {

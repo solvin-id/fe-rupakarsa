@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     template: "%s · Rupakarsa CMS",
   },
   description:
-    "CMS internal Rupakarsa: kelola tenant, akses CMS, provider AI, model, tarif token, dan saldo user.",
+    "CMS internal Rupakarsa: kelola workspace, akses CMS, provider AI, model, tarif token, dan saldo workspace.",
   applicationName: "Rupakarsa CMS",
   robots: { index: false, follow: false },
 };

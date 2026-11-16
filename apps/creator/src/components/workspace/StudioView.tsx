@@ -68,14 +68,16 @@ export function StudioView({ folderId }: { folderId: string }) {
   const [deleteTarget, setDeleteTarget] = useState<Generation | null>(null);
 
   const folder = folders.find(
-    (item) => item.id === folderId && item.tenantId === session?.user.tenantId,
+    (item) => item.id === folderId && item.workspaceId === session?.workspace.id,
   );
   const folderGenerations = useMemo(
     () =>
       generations
-        .filter((item) => item.folderId === folderId)
+        .filter(
+          (item) => item.folderId === folderId && item.workspaceId === session?.workspace.id,
+        )
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
-    [generations, folderId],
+    [generations, folderId, session?.workspace.id],
   );
   const activeModels = useMemo(
     () => models.filter((item) => item.isActive && item.mediaType === mediaType),
@@ -95,7 +97,7 @@ export function StudioView({ folderId }: { folderId: string }) {
       ? aspectRatio
       : (model?.allowedParams.aspectRatios[0] ?? aspectRatio);
 
-  const planCost = planModeCost(session?.tenant.freePlanRemaining ?? 0);
+  const planCost = planModeCost(session?.workspace.freePlanRemaining ?? 0);
   const activeGeneration = activeJobId
     ? (generations.find((item) => item.id === activeJobId) ?? null)
     : null;
@@ -104,7 +106,7 @@ export function StudioView({ folderId }: { folderId: string }) {
     plannedPrompt.trim() &&
       model &&
       session &&
-      session.tenant.tokenBalance >= model.tokenCost &&
+      session.workspace.tokenBalance >= model.tokenCost &&
       !activeJobId,
   );
 
@@ -143,8 +145,8 @@ export function StudioView({ folderId }: { folderId: string }) {
       pushToast("error", "Tulis brief terlebih dahulu.");
       return;
     }
-    const cost = planModeCost(session.tenant.freePlanRemaining);
-    if (!cost.usesFreeQuota && session.tenant.tokenBalance < cost.tokens) {
+    const cost = planModeCost(session.workspace.freePlanRemaining);
+    if (!cost.usesFreeQuota && session.workspace.tokenBalance < cost.tokens) {
       pushToast("error", "Saldo token tidak cukup untuk Plan Mode.");
       return;
     }
@@ -183,7 +185,7 @@ export function StudioView({ folderId }: { folderId: string }) {
       pushToast("error", "Buat plan terlebih dahulu.");
       return;
     }
-    if (session.tenant.tokenBalance < model.tokenCost) {
+    if (session.workspace.tokenBalance < model.tokenCost) {
       pushToast("error", "Saldo token tidak cukup. Hubungi Superadmin untuk top-up.");
       return;
     }
@@ -196,6 +198,7 @@ export function StudioView({ folderId }: { folderId: string }) {
 
     const generation: Generation = {
       id,
+      workspaceId: session.workspace.id,
       folderId,
       userId: session.user.id,
       modelId: model.id,
@@ -349,7 +352,7 @@ export function StudioView({ folderId }: { folderId: string }) {
             onAspectRatioChange={setAspectRatio}
             referenceFile={referenceFile}
             onReferenceChange={setReferenceFile}
-            balance={session?.tenant.tokenBalance ?? 0}
+            balance={session?.workspace.tokenBalance ?? 0}
             onError={(message) => pushToast("error", message)}
             disabled={Boolean(activeJobId)}
           />
@@ -367,12 +370,12 @@ export function StudioView({ folderId }: { folderId: string }) {
             planState={planState}
             onPlan={handlePlan}
             planCost={planCost}
-            freePlanRemaining={session?.tenant.freePlanRemaining ?? 0}
+            freePlanRemaining={session?.workspace.freePlanRemaining ?? 0}
             model={model}
             durationSec={effectiveDuration}
             resolution={effectiveResolution}
             aspectRatio={effectiveAspect}
-            balance={session?.tenant.tokenBalance ?? 0}
+            balance={session?.workspace.tokenBalance ?? 0}
             onGenerate={handleGenerate}
             generating={Boolean(activeJobId)}
             simulateFailure={simulateFailure}

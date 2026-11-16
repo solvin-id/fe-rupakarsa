@@ -1,6 +1,14 @@
+import type { WorkspaceRole } from "./types";
+
 export const TOKEN_RUPIAH = 500;
 
 const numberFormatter = new Intl.NumberFormat("id-ID");
+
+export function formatWorkspaceRole(role: WorkspaceRole): string {
+  if (role === "OWNER") return "Owner";
+  if (role === "ADMIN") return "Admin";
+  return "Member";
+}
 
 export function formatTokens(value: number): string {
   return numberFormatter.format(value);

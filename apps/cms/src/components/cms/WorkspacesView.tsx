@@ -4,25 +4,30 @@ import { Building2, CircleDollarSign, Plus, ShieldCheck, Users } from "lucide-re
 import { useState } from "react";
 
 import { formatDate, formatTokens } from "@rupakarsa/shared/lib/format";
-import { readTenantWallet } from "@rupakarsa/shared/lib/tenant-wallet-cookie";
-import type { Tenant } from "@rupakarsa/shared/lib/types";
+import { slugify } from "@rupakarsa/shared/lib/slug";
+import type { Workspace } from "@rupakarsa/shared/lib/types";
 import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
-import { Button, Dialog, Field, TextInput } from "@rupakarsa/shared/ui";
+import { useWorkspaceStore } from "@rupakarsa/shared/stores/workspace-store";
+import { Button, Dialog, Field, Select, TextInput } from "@rupakarsa/shared/ui";
 
-export function TenantsView() {
-  const tenants = useAdminStore((state) => state.tenants);
-  const users = useAdminStore((state) => state.users);
-  const createTenant = useAdminStore((state) => state.createTenant);
-  const topUpTenant = useAdminStore((state) => state.topUpTenant);
-  const toggleTenant = useAdminStore((state) => state.toggleTenant);
+export function WorkspacesView() {
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const memberships = useWorkspaceStore((state) => state.memberships);
+  const workspaceHydrated = useWorkspaceStore((state) => state.hydrated);
+  const createWorkspace = useWorkspaceStore((state) => state.createWorkspace);
+  const updateWorkspace = useWorkspaceStore((state) => state.updateWorkspace);
+  const accounts = useAdminStore((state) => state.accounts);
+  const adminHydrated = useAdminStore((state) => state.hydrated);
   const pushToast = useUiStore((state) => state.pushToast);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [topUpTarget, setTopUpTarget] = useState<Tenant | null>(null);
+  const [topUpTarget, setTopUpTarget] = useState<Workspace | null>(null);
 
   const [draftName, setDraftName] = useState("");
   const [draftSlug, setDraftSlug] = useState("");
+  const [slugTouched, setSlugTouched] = useState(false);
+  const [draftOwnerId, setDraftOwnerId] = useState("");
   const [draftTokens, setDraftTokens] = useState("0");
   const [draftPlan, setDraftPlan] = useState("0");
   const [draftActive, setDraftActive] = useState(true);
@@ -30,29 +35,33 @@ export function TenantsView() {
   const [topUpAmount, setTopUpAmount] = useState("1000");
   const [topUpPlan, setTopUpPlan] = useState("50");
 
-  const activeCount = tenants.filter((tenant) => tenant.isActive).length;
-
-  function walletFor(tenant: Tenant): { tokenBalance: number; freePlanRemaining: number } {
-    const wallet = readTenantWallet(tenant.id);
-    return {
-      tokenBalance: wallet?.tokenBalance ?? tenant.tokenBalance,
-      freePlanRemaining: wallet?.freePlanRemaining ?? tenant.freePlanRemaining,
-    };
-  }
-
-  const totalTokens = tenants.reduce((total, tenant) => total + walletFor(tenant).tokenBalance, 0);
-  const totalPlan = tenants.reduce(
-    (total, tenant) => total + walletFor(tenant).freePlanRemaining,
+  const activeCount = workspaces.filter((workspace) => workspace.isActive).length;
+  const totalTokens = workspaces.reduce((total, workspace) => total + workspace.tokenBalance, 0);
+  const totalPlan = workspaces.reduce(
+    (total, workspace) => total + workspace.freePlanRemaining,
     0,
   );
 
-  function userCount(tenantId: string): number {
-    return users.filter((user) => user.tenantId === tenantId).length;
+  function ownerName(workspaceId: string): string {
+    const ownerMembership = memberships.find(
+      (membership) => membership.workspaceId === workspaceId && membership.role === "OWNER",
+    );
+    if (!ownerMembership) return "—";
+    return (
+      accounts.find((account) => account.id === ownerMembership.userId)?.fullName ??
+      ownerMembership.userId
+    );
+  }
+
+  function memberCount(workspaceId: string): number {
+    return memberships.filter((membership) => membership.workspaceId === workspaceId).length;
   }
 
   function openCreate(): void {
     setDraftName("");
     setDraftSlug("");
+    setSlugTouched(false);
+    setDraftOwnerId(accounts[0]?.id ?? "");
     setDraftTokens("0");
     setDraftPlan("0");
     setDraftActive(true);
@@ -61,11 +70,11 @@ export function TenantsView() {
 
   function handleCreate(): void {
     if (draftName.trim().length < 2) {
-      pushToast("error", "Nama tenant minimal 2 karakter.");
+      pushToast("error", "Nama workspace minimal 2 karakter.");
       return;
     }
-    if (draftSlug.trim().length < 2) {
-      pushToast("error", "Slug tenant minimal 2 karakter.");
+    if (!draftOwnerId) {
+      pushToast("error", "Pilih owner workspace.");
       return;
     }
     const tokens = Number(draftTokens);
@@ -75,23 +84,24 @@ export function TenantsView() {
       return;
     }
 
-    const tenant = createTenant({
+    const created = createWorkspace({
       name: draftName,
-      slug: draftSlug,
+      slug: slugTouched ? draftSlug : undefined,
+      ownerId: draftOwnerId,
       tokenBalance: Math.round(tokens),
       freePlanRemaining: Math.round(plan),
       isActive: draftActive,
     });
-    if (!tenant) {
-      pushToast("error", "Slug tenant sudah dipakai.");
+    if (!created.ok) {
+      pushToast("error", created.message);
       return;
     }
     setCreateOpen(false);
-    pushToast("success", `Tenant ${tenant.name} ditambahkan.`);
+    pushToast("success", `Workspace ${created.value.name} ditambahkan.`);
   }
 
-  function openTopUp(tenant: Tenant): void {
-    setTopUpTarget(tenant);
+  function openTopUp(workspace: Workspace): void {
+    setTopUpTarget(workspace);
     setTopUpAmount("1000");
     setTopUpPlan("50");
   }
@@ -104,9 +114,36 @@ export function TenantsView() {
       pushToast("error", "Jumlah token harus lebih dari 0.");
       return;
     }
-    topUpTenant(topUpTarget.id, Math.round(amount), Math.max(0, Math.round(plan) || 0));
+    const updated = updateWorkspace(topUpTarget.id, {
+      tokenBalance: topUpTarget.tokenBalance + Math.round(amount),
+      freePlanRemaining: topUpTarget.freePlanRemaining + Math.max(0, Math.round(plan) || 0),
+    });
+    if (!updated.ok) {
+      pushToast("error", updated.message);
+      return;
+    }
     setTopUpTarget(null);
     pushToast("success", `Top-up ${formatTokens(Math.round(amount))} token berhasil.`);
+  }
+
+  function handleToggle(workspace: Workspace): void {
+    const updated = updateWorkspace(workspace.id, { isActive: !workspace.isActive });
+    if (!updated.ok) {
+      pushToast("error", updated.message);
+      return;
+    }
+    pushToast(
+      "success",
+      `${workspace.name} ${updated.value.isActive ? "diaktifkan" : "dinonaktifkan"}.`,
+    );
+  }
+
+  if (!workspaceHydrated || !adminHydrated) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
   }
 
   return (
@@ -114,10 +151,10 @@ export function TenantsView() {
       <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <span className="mono-label text-accent-strong">Kantong token</span>
-          <h1 className="display mt-2 text-[clamp(2.2rem,4vw,3.4rem)] text-ink">Tenants</h1>
+          <h1 className="display mt-2 text-[clamp(2.2rem,4vw,3.4rem)] text-ink">Workspaces</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-            Setiap tenant memiliki saldo token dan kuota Plan Mode. Semua user tenant memakai
-            kantong yang sama.
+            Setiap workspace memiliki saldo token dan kuota Plan Mode sendiri. Semua anggota
+            workspace memakai kantong yang sama.
           </p>
         </div>
         <Button
@@ -126,22 +163,22 @@ export function TenantsView() {
           icon={<Plus className="size-4" aria-hidden />}
           onClick={openCreate}
         >
-          Tambah tenant
+          Tambah workspace
         </Button>
       </header>
 
       <div className="mt-5 flex items-start gap-2.5 rounded-2xl border border-accent/20 bg-accent-soft/50 px-4 py-3.5">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-strong" aria-hidden />
         <p className="text-xs leading-relaxed text-ink/70">
-          <span className="font-medium text-ink">Token adalah milik tenant.</span> User mengambil
-          token dari kantong tenant saat generate. Top-up dan kuota Plan Mode diatur di sini.
+          <span className="font-medium text-ink">Token adalah milik workspace.</span> User mengambil
+          token dari workspace aktifnya saat generate. Top-up dan kuota Plan Mode diatur di sini.
         </p>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Total tenant", value: formatTokens(tenants.length), icon: Building2 },
-          { label: "Tenant aktif", value: formatTokens(activeCount), icon: ShieldCheck },
+          { label: "Total workspace", value: formatTokens(workspaces.length), icon: Building2 },
+          { label: "Workspace aktif", value: formatTokens(activeCount), icon: ShieldCheck },
           { label: "Token beredar", value: formatTokens(totalTokens), icon: CircleDollarSign },
           { label: "Plan gratis", value: formatTokens(totalPlan), icon: Users },
         ].map((item) => {
@@ -164,51 +201,57 @@ export function TenantsView() {
       </div>
 
       <div className="mt-4 overflow-hidden rounded-[1.75rem] border border-border bg-white">
-        <div className="hidden grid-cols-[minmax(0,1.4fr)_0.6fr_0.7fr_0.6fr_0.55fr_7.5rem] items-center gap-4 border-b border-border bg-surface-2/40 px-6 py-3 text-[10px] uppercase tracking-[0.14em] text-muted xl:grid">
-          <span>Tenant</span>
-          <span>Users</span>
+        <div className="hidden grid-cols-[minmax(0,1.5fr)_0.8fr_0.5fr_0.6fr_0.5fr_0.5fr_7rem] items-center gap-4 border-b border-border bg-surface-2/40 px-6 py-3 text-[10px] uppercase tracking-[0.14em] text-muted xl:grid">
+          <span>Workspace</span>
+          <span>Owner</span>
+          <span>Anggota</span>
           <span>Token</span>
           <span>Plan</span>
           <span>Status</span>
           <span className="text-right">Aksi</span>
         </div>
 
-        {tenants.map((tenant) => (
+        {workspaces.map((workspace) => (
           <div
-            key={tenant.id}
-            className="grid gap-3 border-b border-border/60 px-6 py-4 last:border-b-0 xl:grid-cols-[minmax(0,1.4fr)_0.6fr_0.7fr_0.6fr_0.55fr_7.5rem] xl:items-center xl:gap-4"
+            key={workspace.id}
+            className="grid gap-3 border-b border-border/60 px-6 py-4 last:border-b-0 xl:grid-cols-[minmax(0,1.5fr)_0.8fr_0.5fr_0.6fr_0.5fr_0.5fr_7rem] xl:items-center xl:gap-4"
           >
             <div className="flex items-center gap-2.5">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-canvas">
                 <Building2 className="size-4" aria-hidden />
               </span>
               <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-ink">{tenant.name}</p>
-                <p className="truncate font-mono text-[10px] text-muted">{tenant.slug}</p>
-                <p className="text-[9px] text-muted/70">Dibuat {formatDate(tenant.createdAt)}</p>
+                <p className="truncate text-sm font-medium text-ink">{workspace.name}</p>
+                <p className="truncate font-mono text-[10px] text-muted">{workspace.slug}</p>
+                <p className="text-[9px] text-muted/70">
+                  Dibuat {formatDate(workspace.createdAt)}
+                </p>
               </div>
             </div>
 
-            <p className="whitespace-nowrap text-xs text-muted">{userCount(tenant.id)} user</p>
+            <p className="truncate whitespace-nowrap text-xs text-muted">{ownerName(workspace.id)}</p>
+            <p className="whitespace-nowrap text-xs text-muted">
+              {formatTokens(memberCount(workspace.id))} anggota
+            </p>
             <p className="whitespace-nowrap text-sm font-semibold text-ink">
-              {formatTokens(walletFor(tenant).tokenBalance)}
+              {formatTokens(workspace.tokenBalance)}
             </p>
             <p className="whitespace-nowrap text-xs text-muted">
-              {formatTokens(walletFor(tenant).freePlanRemaining)}×
+              {formatTokens(workspace.freePlanRemaining)}×
             </p>
 
             <button
               type="button"
-              onClick={() => toggleTenant(tenant.id)}
-              aria-pressed={tenant.isActive}
+              onClick={() => handleToggle(workspace)}
+              aria-pressed={workspace.isActive}
               className={`relative h-6 w-11 rounded-full transition-colors ${
-                tenant.isActive ? "bg-success" : "bg-ink/15"
+                workspace.isActive ? "bg-success" : "bg-ink/15"
               }`}
-              aria-label={`${tenant.isActive ? "Nonaktifkan" : "Aktifkan"} ${tenant.name}`}
+              aria-label={`${workspace.isActive ? "Nonaktifkan" : "Aktifkan"} ${workspace.name}`}
             >
               <span
                 className={`absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow transition-transform ${
-                  tenant.isActive ? "translate-x-5" : "translate-x-0"
+                  workspace.isActive ? "translate-x-5" : "translate-x-0"
                 }`}
               />
             </button>
@@ -218,7 +261,7 @@ export function TenantsView() {
               size="sm"
               className="justify-self-end"
               icon={<CircleDollarSign className="size-3.5" aria-hidden />}
-              onClick={() => openTopUp(tenant)}
+              onClick={() => openTopUp(workspace)}
             >
               Top up
             </Button>
@@ -229,15 +272,15 @@ export function TenantsView() {
       <div className="mt-4 flex items-start gap-2 rounded-2xl border border-border bg-white/60 px-4 py-3 text-[11px] leading-relaxed text-muted">
         <CircleDollarSign className="mt-0.5 size-3.5 shrink-0 text-accent" aria-hidden />
         <p>
-          Top-up menambah saldo tenant. User dari tenant tersebut langsung memakai saldo baru saat
-          generate—tanpa top-up per akun.
+          Top-up menambah saldo workspace. Semua anggota langsung memakai saldo baru saat generate.
+          Penghapusan workspace dilakukan owner dari Creator.
         </p>
       </div>
 
       <Dialog
         open={createOpen}
-        title="Tambah tenant"
-        description="Tenant baru mendapat kantong token sendiri."
+        title="Tambah workspace"
+        description="Workspace baru mendapat kantong token sendiri dan satu owner."
         onClose={() => setCreateOpen(false)}
         footer={
           <>
@@ -245,48 +288,64 @@ export function TenantsView() {
               Batal
             </Button>
             <Button variant="primary" onClick={handleCreate}>
-              Tambah tenant
+              Tambah workspace
             </Button>
           </>
         }
       >
         <div className="flex flex-col gap-4">
-          <Field label="Nama tenant" htmlFor="tenant-name">
+          <Field label="Nama workspace" htmlFor="cms-workspace-name">
             <TextInput
-              id="tenant-name"
+              id="cms-workspace-name"
               value={draftName}
-              onChange={(event) => setDraftName(event.target.value)}
-              placeholder="Contoh: Nama tenant"
+              onChange={(event) => {
+                setDraftName(event.target.value);
+                if (!slugTouched) setDraftSlug(slugify(event.target.value));
+              }}
+              placeholder="Contoh: Lumiere Lab"
               autoFocus
             />
           </Field>
           <Field
-            label="Slug tenant"
-            htmlFor="tenant-slug"
-            hint="Huruf kecil, angka, dan tanda hubung. Contoh: alfateve."
+            label="Slug workspace"
+            htmlFor="cms-workspace-slug"
+            hint="Huruf kecil, angka, dan tanda hubung. Slug tidak dapat diubah setelah dibuat."
           >
             <TextInput
-              id="tenant-slug"
+              id="cms-workspace-slug"
               value={draftSlug}
-              onChange={(event) =>
-                setDraftSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))
-              }
-              placeholder="alfateve"
+              onChange={(event) => {
+                setSlugTouched(true);
+                setDraftSlug(event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"));
+              }}
+              placeholder="lumiere-lab"
+            />
+          </Field>
+          <Field label="Owner" htmlFor="cms-workspace-owner" hint="Owner dapat menghapus workspace.">
+            <Select
+              id="cms-workspace-owner"
+              value={draftOwnerId}
+              onChange={setDraftOwnerId}
+              options={accounts.map((account) => ({
+                value: account.id,
+                label: account.fullName,
+                description: account.email,
+              }))}
             />
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Token awal" htmlFor="tenant-tokens">
+            <Field label="Token awal" htmlFor="cms-workspace-tokens">
               <TextInput
-                id="tenant-tokens"
+                id="cms-workspace-tokens"
                 type="number"
                 min={0}
                 value={draftTokens}
                 onChange={(event) => setDraftTokens(event.target.value)}
               />
             </Field>
-            <Field label="Plan gratis" htmlFor="tenant-plan">
+            <Field label="Plan gratis" htmlFor="cms-workspace-plan">
               <TextInput
-                id="tenant-plan"
+                id="cms-workspace-plan"
                 type="number"
                 min={0}
                 value={draftPlan}
@@ -302,9 +361,9 @@ export function TenantsView() {
               className="mt-0.5 size-4 accent-[#d93e14]"
             />
             <span>
-              <span className="block text-xs font-medium text-ink">Aktifkan tenant</span>
+              <span className="block text-xs font-medium text-ink">Aktifkan workspace</span>
               <span className="mt-0.5 block text-[10px] leading-relaxed text-muted">
-                User dari tenant aktif dapat login dan memakai saldo tenant.
+                Anggota workspace aktif dapat memakai saldo workspace untuk produksi.
               </span>
             </span>
           </label>
@@ -314,7 +373,7 @@ export function TenantsView() {
       <Dialog
         open={Boolean(topUpTarget)}
         title={`Top up ${topUpTarget?.name ?? ""}`}
-        description="Tambahkan saldo token dan kuota Plan Mode ke kantong tenant."
+        description="Tambahkan saldo token dan kuota Plan Mode ke kantong workspace."
         onClose={() => setTopUpTarget(null)}
         footer={
           <>
@@ -331,23 +390,22 @@ export function TenantsView() {
           <div className="rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-[11px] text-muted">
             Saldo saat ini:{" "}
             <span className="font-medium text-ink">
-              {formatTokens(topUpTarget ? walletFor(topUpTarget).tokenBalance : 0)} token
+              {formatTokens(topUpTarget?.tokenBalance ?? 0)} token
             </span>{" "}
-            · {formatTokens(topUpTarget ? walletFor(topUpTarget).freePlanRemaining : 0)}× plan
-            gratis
+            · {formatTokens(topUpTarget?.freePlanRemaining ?? 0)}× plan gratis
           </div>
-          <Field label="Tambah token" htmlFor="tenant-topup-amount">
+          <Field label="Tambah token" htmlFor="cms-workspace-topup-amount">
             <TextInput
-              id="tenant-topup-amount"
+              id="cms-workspace-topup-amount"
               type="number"
               min={1}
               value={topUpAmount}
               onChange={(event) => setTopUpAmount(event.target.value)}
             />
           </Field>
-          <Field label="Tambah plan gratis" htmlFor="tenant-topup-plan">
+          <Field label="Tambah plan gratis" htmlFor="cms-workspace-topup-plan">
             <TextInput
-              id="tenant-topup-plan"
+              id="cms-workspace-topup-plan"
               type="number"
               min={0}
               value={topUpPlan}

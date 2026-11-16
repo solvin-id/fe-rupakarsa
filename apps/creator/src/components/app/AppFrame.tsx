@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Building2,
   ChevronRight,
   CircleDollarSign,
   FolderKanban,
@@ -17,18 +18,24 @@ import { useEffect, useState } from "react";
 
 import { Logo } from "@rupakarsa/shared/brand";
 import { hasCmsAccess } from "@rupakarsa/shared/lib/auth";
-import { formatTokens } from "@rupakarsa/shared/lib/format";
+import { formatTokens, formatWorkspaceRole } from "@rupakarsa/shared/lib/format";
 import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
 import { useProjectStore } from "@rupakarsa/shared/stores/project-store";
 import { useSessionStore } from "@rupakarsa/shared/stores/session-store";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
+import { useWorkspaceStore } from "@rupakarsa/shared/stores/workspace-store";
 import { SurfaceSwitcher } from "@rupakarsa/shared/surface";
 import { Button, ToastViewport } from "@rupakarsa/shared/ui";
+
+import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
 
 const CREATOR_URL = process.env.NEXT_PUBLIC_CREATOR_URL ?? "http://localhost:3000";
 const CMS_URL = process.env.NEXT_PUBLIC_CMS_URL ?? "http://localhost:3001";
 
-const USER_NAV = [{ href: "/app/projects", label: "Proyek", icon: FolderKanban }];
+const USER_NAV = [
+  { href: "/app/workspaces", label: "Workspace", icon: Building2 },
+  { href: "/app/projects", label: "Proyek", icon: FolderKanban },
+];
 
 function isActive(pathname: string, href: string): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -44,22 +51,50 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   const signOut = useSessionStore((state) => state.signOut);
   const hydrateProjects = useProjectStore((state) => state.hydrate);
   const hydrateAdmin = useAdminStore((state) => state.hydrate);
+  const hydrateWorkspaces = useWorkspaceStore((state) => state.hydrate);
+  const workspaceHydrated = useWorkspaceStore((state) => state.hydrated);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const memberships = useWorkspaceStore((state) => state.memberships);
   const pushToast = useUiStore((state) => state.pushToast);
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
+    hydrateAdmin();
+    hydrateWorkspaces();
     hydrateSession();
     hydrateProjects();
-    hydrateAdmin();
     refreshAccess();
-  }, [hydrateSession, hydrateProjects, hydrateAdmin, refreshAccess]);
+  }, [
+    hydrateAdmin,
+    hydrateWorkspaces,
+    hydrateSession,
+    hydrateProjects,
+    refreshAccess,
+  ]);
+
+  useEffect(() => {
+    function syncPlatform(): void {
+      useWorkspaceStore.getState().refresh();
+      useAdminStore.getState().refreshAccounts();
+      useSessionStore.getState().refreshAccess();
+    }
+    function handleVisibility(): void {
+      if (document.visibilityState === "visible") syncPlatform();
+    }
+    window.addEventListener("focus", syncPlatform);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", syncPlatform);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     if (hydrated && !session) router.replace("/login");
   }, [hydrated, session, router]);
 
-  if (!hydrated || !session) {
+  if (!hydrated || !workspaceHydrated || !session) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-canvas">
         <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -68,9 +103,15 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
   }
 
   const user = session.user;
+  const workspace = session.workspace;
+  const workspaceRole =
+    memberships.find(
+      (membership) => membership.workspaceId === workspace.id && membership.userId === user.id,
+    )?.role ?? null;
+  const myMemberships = memberships.filter((membership) => membership.userId === user.id);
   const canOpenCms = hasCmsAccess(user);
-  const balance = session.tenant.tokenBalance;
-  const planQuota = session.tenant.freePlanRemaining;
+  const balance = workspace.tokenBalance;
+  const planQuota = workspace.freePlanRemaining;
 
   function handleSignOut(): void {
     signOut();
@@ -81,18 +122,28 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
     pushToast("info", "Top-up token dilakukan oleh tim Rupakarsa melalui CMS.");
   }
 
-  if (!session.tenant.isActive) {
+  if (!workspace.isActive) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-canvas px-5">
         <div className="w-full max-w-lg rounded-[1.75rem] border border-border bg-white p-8 text-center shadow-card">
           <ShieldAlert className="mx-auto size-8 text-accent" aria-hidden />
-          <h1 className="mt-3 text-xl font-semibold text-ink">Tenant tidak aktif</h1>
+          <h1 className="mt-3 text-xl font-semibold text-ink">Workspace tidak aktif</h1>
           <p className="mt-2 text-sm leading-relaxed text-muted">
-            Tenant {session.tenant.name} sedang dinonaktifkan. Hubungi Superadmin Rupakarsa.
+            Workspace {workspace.name} sedang dinonaktifkan. Hubungi Superadmin Rupakarsa untuk
+            mengaktifkan kembali.
           </p>
-          <Button variant="primary" className="mt-5" onClick={handleSignOut}>
-            Keluar
-          </Button>
+          <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
+            {canOpenCms ? (
+              <a href={`${CMS_URL}/workspaces`}>
+                <Button variant="secondary" className="w-full sm:w-auto">
+                  Buka CMS
+                </Button>
+              </a>
+            ) : null}
+            <Button variant="primary" onClick={handleSignOut}>
+              Keluar
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -113,13 +164,33 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       </div>
 
       <div className="mx-4 rounded-2xl border border-border bg-surface-2/70 px-3.5 py-3">
-        <p className="mono-label text-[9px] text-muted">Workspace</p>
+        <p className="mono-label text-[9px] text-muted">Workspace aktif</p>
         <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-ink">
-          {user.tenantName}
-          <span className="rounded-full bg-accent-3-soft px-1.5 py-0.5 text-[9px] font-medium text-[#3f6212]">
-            Aktif
+          <span className="truncate">{workspace.name}</span>
+          <span
+            className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium ${
+              workspace.isActive
+                ? "bg-accent-3-soft text-[#3f6212]"
+                : "bg-danger/10 text-danger"
+            }`}
+          >
+            {workspace.isActive ? "Aktif" : "Nonaktif"}
           </span>
         </p>
+        <p className="mt-0.5 truncate font-mono text-[10px] text-muted">{workspace.slug}</p>
+        <p className="mt-1 text-[10px] text-muted">
+          Role Anda:{" "}
+          <span className="font-medium text-ink">
+            {workspaceRole ? formatWorkspaceRole(workspaceRole) : "—"}
+          </span>
+        </p>
+        <div className="mt-2.5">
+          <WorkspaceSwitcher
+            activeWorkspace={workspace}
+            memberships={myMemberships}
+            workspaces={workspaces}
+          />
+        </div>
       </div>
 
       <div className="mx-4 mt-3">
@@ -152,12 +223,11 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
             </Link>
           );
         })}
-
       </nav>
 
       <div className="m-3 rounded-2xl border border-border bg-white p-3.5 shadow-card">
         <div className="flex items-center justify-between">
-          <p className="mono-label text-[9px] text-muted">Saldo tenant</p>
+          <p className="mono-label text-[9px] text-muted">Saldo workspace</p>
           <CircleDollarSign className="size-3.5 text-accent" aria-hidden />
         </div>
         <p className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-ink">
@@ -241,14 +311,14 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
                 <LayoutDashboard className="size-3.5" aria-hidden />
                 <span>Creator</span>
                 <ChevronRight className="size-3" aria-hidden />
-                <span className="text-ink">{user.tenantName}</span>
+                <span className="text-ink">{workspace.name}</span>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <span className="hidden items-center gap-1.5 rounded-full border border-border bg-white/60 px-3 py-1.5 text-[11px] text-muted sm:inline-flex">
                 <span className="size-1.5 rounded-full bg-success" aria-hidden />
-                Member
+                {workspaceRole ? formatWorkspaceRole(workspaceRole) : "Member"}
               </span>
               <button
                 type="button"

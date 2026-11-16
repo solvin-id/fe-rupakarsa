@@ -21,11 +21,12 @@ npm test
 
 ## Cakupan
 
-- `auth.test.ts` — aturan akses Creator vs CMS (`hasCmsAccess`, `authorizeSignIn`).
+- `auth.test.ts` — aturan akses Creator vs CMS (`hasCmsAccess`, `authorizeSignIn`), helper role workspace.
 - `tokens.test.ts` — tarif token, kuota Plan Mode, kapasitas render.
 - `plan.test.ts` — struktur Plan Blueprint video/gambar.
-- `stores.test.ts` — sesi per surface, grant/revoke akses CMS, CRUD folder.
-- `cookies.test.ts` — round-trip cookie sesi, akses CMS, dan kantong tenant.
+- `stores.test.ts` — sesi per workspace, saldo/plan per workspace, grant/revoke akses CMS, provisi akun, CRUD folder.
+- `workspaces.test.ts` — registry workspace: create, join request, approve/reject, role, remove, leave, delete.
+- `cookies.test.ts` — round-trip cookie akun, registry workspace (chunked), dan pointer sesi.
 - `contact.test.ts` — normalisasi nomor WhatsApp admin dan pembentukan link `wa.me`.
 
 ## Aturan

@@ -165,7 +165,7 @@ export function Hero() {
               style={{ "--float-rotate": "2deg", animationDelay: "0.6s" } as React.CSSProperties}
             >
               <div className="flex items-center justify-between">
-                <p className="mono-label text-[9px] text-muted">Saldo tenant</p>
+                <p className="mono-label text-[9px] text-muted">Saldo workspace</p>
                 <span className="rounded-full bg-accent-3-soft px-2 py-0.5 text-[9px] font-medium text-[#3f6212]">
                   Aktif
                 </span>

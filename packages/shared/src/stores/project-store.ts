@@ -11,9 +11,15 @@ interface ProjectState {
   generations: Generation[];
   hydrated: boolean;
   hydrate: () => void;
-  createFolder: (input: { name: string; description: string; user: User }) => Folder;
+  createFolder: (input: {
+    name: string;
+    description: string;
+    user: User;
+    workspaceId: string;
+  }) => Folder;
   renameFolder: (id: string, name: string, description: string) => void;
   deleteFolder: (id: string) => void;
+  deleteWorkspaceData: (workspaceId: string) => void;
   addGeneration: (generation: Generation) => void;
   updateGeneration: (id: string, patch: Partial<Generation>) => void;
   deleteGeneration: (id: string) => void;
@@ -53,11 +59,11 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
     });
   },
 
-  createFolder: ({ name, description, user }) => {
+  createFolder: ({ name, description, user, workspaceId }) => {
     const now = new Date().toISOString();
     const folder: Folder = {
       id: `fld_${crypto.randomUUID().slice(0, 8)}`,
-      tenantId: user.tenantId,
+      workspaceId,
       userId: user.id,
       name: name.trim(),
       description: description.trim(),
@@ -88,6 +94,13 @@ export const useProjectStore = create<ProjectState>()((set, get) => ({
   deleteFolder: (id) => {
     const folders = get().folders.filter((folder) => folder.id !== id);
     const generations = get().generations.filter((item) => item.folderId !== id);
+    persist(folders, generations);
+    set({ folders, generations });
+  },
+
+  deleteWorkspaceData: (workspaceId) => {
+    const folders = get().folders.filter((folder) => folder.workspaceId !== workspaceId);
+    const generations = get().generations.filter((item) => item.workspaceId !== workspaceId);
     persist(folders, generations);
     set({ folders, generations });
   },

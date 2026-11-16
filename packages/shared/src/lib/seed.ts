@@ -4,15 +4,17 @@ import type {
   DemoAccount,
   Folder,
   Generation,
-  Tenant,
   User,
+  Workspace,
+  WorkspaceJoinRequest,
+  WorkspaceMembership,
 } from "./types";
 
 export const DEMO_PASSWORD = "rupakarsa";
 
-export const SEED_TENANTS: Tenant[] = [
+export const SEED_WORKSPACES: Workspace[] = [
   {
-    id: "ten_alfateve",
+    id: "ws_alfateve",
     name: "Alfateve",
     slug: "alfateve",
     tokenBalance: 4000,
@@ -21,7 +23,7 @@ export const SEED_TENANTS: Tenant[] = [
     createdAt: "2026-09-20T08:00:00.000Z",
   },
   {
-    id: "ten_rupakarsa",
+    id: "ws_rupakarsa",
     name: "Rupakarsa",
     slug: "rupakarsa",
     tokenBalance: 0,
@@ -29,13 +31,48 @@ export const SEED_TENANTS: Tenant[] = [
     isActive: true,
     createdAt: "2026-09-20T08:00:00.000Z",
   },
+  {
+    id: "ws_demo",
+    name: "Demo Studio",
+    slug: "demo-studio",
+    tokenBalance: 0,
+    freePlanRemaining: 0,
+    isActive: true,
+    createdAt: "2026-10-02T08:00:00.000Z",
+  },
+  {
+    id: "ws_nadia",
+    name: "Nadia Studio",
+    slug: "nadia-studio",
+    tokenBalance: 0,
+    freePlanRemaining: 0,
+    isActive: true,
+    createdAt: "2026-10-08T09:30:00.000Z",
+  },
+  {
+    id: "ws_bagas",
+    name: "Bagas Studio",
+    slug: "bagas-studio",
+    tokenBalance: 0,
+    freePlanRemaining: 0,
+    isActive: true,
+    createdAt: "2026-10-11T11:15:00.000Z",
+  },
+  {
+    id: "ws_lumiere",
+    name: "Lumiere Lab",
+    slug: "lumiere-lab",
+    tokenBalance: 1200,
+    freePlanRemaining: 50,
+    isActive: true,
+    createdAt: "2026-11-01T10:10:00.000Z",
+  },
 ];
 
-export const SEED_USERS: User[] = [
+export const SEED_ACCOUNTS: User[] = [
   {
     id: "usr_demo",
-    tenantId: "ten_alfateve",
-    tenantName: "Alfateve",
+    defaultWorkspaceId: "ws_alfateve",
     email: "demo@rupakarsa.id",
     fullName: "Demo Kreator",
     role: "USER",
@@ -45,8 +82,7 @@ export const SEED_USERS: User[] = [
   },
   {
     id: "usr_admin",
-    tenantId: "ten_rupakarsa",
-    tenantName: "Rupakarsa",
+    defaultWorkspaceId: "ws_rupakarsa",
     email: "admin@rupakarsa.id",
     fullName: "Superadmin Rupakarsa",
     role: "SUPERADMIN",
@@ -56,8 +92,7 @@ export const SEED_USERS: User[] = [
   },
   {
     id: "usr_nadia",
-    tenantId: "ten_alfateve",
-    tenantName: "Alfateve",
+    defaultWorkspaceId: "ws_alfateve",
     email: "nadia@alfateve.co.id",
     fullName: "Nadia Prameswari",
     role: "USER",
@@ -67,8 +102,7 @@ export const SEED_USERS: User[] = [
   },
   {
     id: "usr_bagas",
-    tenantId: "ten_alfateve",
-    tenantName: "Alfateve",
+    defaultWorkspaceId: "ws_alfateve",
     email: "bagas@alfateve.co.id",
     fullName: "Bagas Aditya",
     role: "USER",
@@ -85,10 +119,82 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
   { email: "bagas@alfateve.co.id", password: DEMO_PASSWORD, userId: "usr_bagas" },
 ];
 
+export const SEED_MEMBERSHIPS: WorkspaceMembership[] = [
+  {
+    id: "wsm_alfateve_demo",
+    workspaceId: "ws_alfateve",
+    userId: "usr_demo",
+    role: "OWNER",
+    joinedAt: "2026-10-02T08:00:00.000Z",
+  },
+  {
+    id: "wsm_alfateve_nadia",
+    workspaceId: "ws_alfateve",
+    userId: "usr_nadia",
+    role: "ADMIN",
+    joinedAt: "2026-10-08T09:30:00.000Z",
+  },
+  {
+    id: "wsm_alfateve_bagas",
+    workspaceId: "ws_alfateve",
+    userId: "usr_bagas",
+    role: "MEMBER",
+    joinedAt: "2026-10-11T11:15:00.000Z",
+  },
+  {
+    id: "wsm_rupakarsa_admin",
+    workspaceId: "ws_rupakarsa",
+    userId: "usr_admin",
+    role: "OWNER",
+    joinedAt: "2026-09-20T08:00:00.000Z",
+  },
+  {
+    id: "wsm_demo_demo",
+    workspaceId: "ws_demo",
+    userId: "usr_demo",
+    role: "OWNER",
+    joinedAt: "2026-10-02T08:00:00.000Z",
+  },
+  {
+    id: "wsm_nadia_nadia",
+    workspaceId: "ws_nadia",
+    userId: "usr_nadia",
+    role: "OWNER",
+    joinedAt: "2026-10-08T09:30:00.000Z",
+  },
+  {
+    id: "wsm_bagas_bagas",
+    workspaceId: "ws_bagas",
+    userId: "usr_bagas",
+    role: "OWNER",
+    joinedAt: "2026-10-11T11:15:00.000Z",
+  },
+  {
+    id: "wsm_lumiere_admin",
+    workspaceId: "ws_lumiere",
+    userId: "usr_admin",
+    role: "OWNER",
+    joinedAt: "2026-11-01T10:10:00.000Z",
+  },
+];
+
+export const SEED_JOIN_REQUESTS: WorkspaceJoinRequest[] = [
+  {
+    id: "wsr_bagas_lumiere",
+    workspaceId: "ws_lumiere",
+    userId: "usr_bagas",
+    message: "Bergabung untuk produksi kampanye Lumiere.",
+    status: "PENDING",
+    createdAt: "2026-11-15T10:00:00.000Z",
+    resolvedAt: null,
+    resolvedByUserId: null,
+  },
+];
+
 export const SEED_FOLDERS: Folder[] = [
   {
     id: "fld_rasa",
-    tenantId: "ten_alfateve",
+    workspaceId: "ws_alfateve",
     userId: "usr_demo",
     name: "Kampanye Rasa Nusantara",
     description:
@@ -98,7 +204,7 @@ export const SEED_FOLDERS: Folder[] = [
   },
   {
     id: "fld_senja",
-    tenantId: "ten_alfateve",
+    workspaceId: "ws_alfateve",
     userId: "usr_demo",
     name: "Film Pendek: Senja di Tegalsari",
     description:
@@ -108,7 +214,7 @@ export const SEED_FOLDERS: Folder[] = [
   },
   {
     id: "fld_lumiere",
-    tenantId: "ten_alfateve",
+    workspaceId: "ws_alfateve",
     userId: "usr_demo",
     name: "Product Launch: Lumiere",
     description: "Video produk 10 detik dan still image untuk paid ads.",
@@ -117,7 +223,7 @@ export const SEED_FOLDERS: Folder[] = [
   },
   {
     id: "fld_arsip",
-    tenantId: "ten_alfateve",
+    workspaceId: "ws_alfateve",
     userId: "usr_demo",
     name: "Arsip Eksperimen",
     description: "Uji coba prompt, referensi visual, dan look development.",
@@ -126,7 +232,7 @@ export const SEED_FOLDERS: Folder[] = [
   },
 ];
 
-export const SEED_GENERATIONS: Generation[] = [
+const SEED_GENERATION_CONTENT: Omit<Generation, "workspaceId">[] = [
   {
     id: "gen_rasa_1",
     folderId: "fld_rasa",
@@ -344,6 +450,11 @@ export const SEED_GENERATIONS: Generation[] = [
     completedAt: "2026-11-11T10:01:00.000Z",
   },
 ];
+
+export const SEED_GENERATIONS: Generation[] = SEED_GENERATION_CONTENT.map((generation) => ({
+  ...generation,
+  workspaceId: "ws_alfateve",
+}));
 
 export const SEED_PROVIDERS: AiProvider[] = [
   {

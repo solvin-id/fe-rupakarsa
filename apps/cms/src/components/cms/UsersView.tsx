@@ -4,19 +4,22 @@ import { ArrowRight, Building2, Search, ShieldCheck, ShieldOff, UserPlus, Users 
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { formatDate, formatTokens } from "@rupakarsa/shared/lib/format";
-import { readTenantWallet } from "@rupakarsa/shared/lib/tenant-wallet-cookie";
+import { formatDate, formatTokens, formatWorkspaceRole } from "@rupakarsa/shared/lib/format";
 import type { Role, User } from "@rupakarsa/shared/lib/types";
 import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
+import { useWorkspaceStore } from "@rupakarsa/shared/stores/workspace-store";
 import { Button, Dialog, Field, Select, TextInput } from "@rupakarsa/shared/ui";
 
 export function UsersView() {
-  const tenants = useAdminStore((state) => state.tenants);
-  const users = useAdminStore((state) => state.users);
-  const createUser = useAdminStore((state) => state.createUser);
-  const toggleUser = useAdminStore((state) => state.toggleUser);
+  const accounts = useAdminStore((state) => state.accounts);
+  const adminHydrated = useAdminStore((state) => state.hydrated);
+  const createAccount = useAdminStore((state) => state.createAccount);
+  const toggleAccount = useAdminStore((state) => state.toggleAccount);
   const setCmsAccess = useAdminStore((state) => state.setCmsAccess);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
+  const memberships = useWorkspaceStore((state) => state.memberships);
+  const workspaceHydrated = useWorkspaceStore((state) => state.hydrated);
   const pushToast = useUiStore((state) => state.pushToast);
 
   const [query, setQuery] = useState("");
@@ -26,64 +29,65 @@ export function UsersView() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("USER");
-  const [tenantId, setTenantId] = useState(tenants[0]?.id ?? "ten_alfateve");
   const [grantCms, setGrantCms] = useState(false);
 
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    if (!term) return users;
-    return users.filter(
-      (user) =>
-        user.fullName.toLowerCase().includes(term) ||
-        user.email.toLowerCase().includes(term) ||
-        user.tenantName.toLowerCase().includes(term),
+    if (!term) return accounts;
+
+    const matchingWorkspaceIds = new Set(
+      workspaces
+        .filter((workspace) => workspace.name.toLowerCase().includes(term))
+        .map((workspace) => workspace.id),
     );
-  }, [users, query]);
 
-  const cmsCount = users.filter((user) => user.role === "SUPERADMIN" || user.cmsAccess).length;
-  const activeCount = users.filter((user) => user.isActive).length;
+    return accounts.filter(
+      (account) =>
+        account.fullName.toLowerCase().includes(term) ||
+        account.email.toLowerCase().includes(term) ||
+        memberships.some(
+          (membership) =>
+            membership.userId === account.id && matchingWorkspaceIds.has(membership.workspaceId),
+        ),
+    );
+  }, [accounts, memberships, query, workspaces]);
 
-  function tenantBalance(user: User): number {
-    const tenant = tenants.find((item) => item.id === user.tenantId);
-    return readTenantWallet(user.tenantId)?.tokenBalance ?? tenant?.tokenBalance ?? 0;
+  const cmsCount = accounts.filter(
+    (account) => account.role === "SUPERADMIN" || account.cmsAccess,
+  ).length;
+  const activeCount = accounts.filter((account) => account.isActive).length;
+
+  function membershipsFor(userId: string) {
+    return memberships
+      .filter((membership) => membership.userId === userId)
+      .map((membership) => ({
+        membership,
+        workspace: workspaces.find((item) => item.id === membership.workspaceId),
+      }))
+      .filter((entry) => Boolean(entry.workspace));
   }
 
   function openCreate(): void {
     setFullName("");
     setEmail("");
     setRole("USER");
-    setTenantId(tenants[0]?.id ?? "ten_alfateve");
     setGrantCms(false);
     setCreateOpen(true);
   }
 
   function handleCreate(): void {
-    if (fullName.trim().length < 2) {
-      pushToast("error", "Nama minimal 2 karakter.");
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      pushToast("error", "Format email tidak valid.");
-      return;
-    }
-    const user = createUser({
+    const created = createAccount({
       fullName,
       email,
       role,
-      tenantId,
       cmsAccess: role === "SUPERADMIN" ? true : grantCms,
     });
-    if (!user) {
-      pushToast("error", "Email sudah terdaftar.");
+    if (!created.ok) {
+      pushToast("error", created.message);
       return;
     }
     setCreateOpen(false);
-    pushToast(
-      "success",
-      user.cmsAccess
-        ? `Akun ${user.fullName} didaftarkan dengan akses CMS.`
-        : `Akun ${user.fullName} didaftarkan sebagai creator.`,
-    );
+    pushToast("success", "Akun dan workspace personal dibuat.");
   }
 
   function confirmAccess(): void {
@@ -99,16 +103,25 @@ export function UsersView() {
     );
   }
 
+  if (!adminHydrated || !workspaceHydrated) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-up">
       <header className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <span className="mono-label text-accent-strong">Tenant &amp; akses</span>
+          <span className="mono-label text-accent-strong">Akun &amp; akses</span>
           <h1 className="display mt-2 text-[clamp(2.2rem,4vw,3.4rem)] text-ink">
             Users &amp; akses
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-            Default akun adalah creator. Token dan Plan Mode diambil dari kantong tenant.
+            Default akun adalah creator. Token dan Plan Mode diambil dari workspace yang sedang
+            dipakai akun tersebut.
           </p>
         </div>
         <Button
@@ -125,16 +138,17 @@ export function UsersView() {
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-accent-strong" aria-hidden />
         <p className="text-xs leading-relaxed text-ink/70">
           <span className="font-medium text-ink">Akses CMS adalah izin tambahan.</span> User tetap
-          ber-role USER dan memakai saldo token tenant-nya. Top-up dilakukan di menu Tenants.
+          ber-role USER dan memakai saldo workspace-nya. Setiap akun baru otomatis mendapat satu
+          workspace personal. Top-up dilakukan di menu Workspaces.
         </p>
       </div>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: "Total user", value: formatTokens(users.length), icon: Users },
+          { label: "Total user", value: formatTokens(accounts.length), icon: Users },
           { label: "Akses CMS", value: formatTokens(cmsCount), icon: ShieldCheck },
           { label: "User aktif", value: formatTokens(activeCount), icon: ShieldCheck },
-          { label: "Tenant", value: formatTokens(tenants.length), icon: Building2 },
+          { label: "Workspace", value: formatTokens(workspaces.length), icon: Building2 },
         ].map((item) => {
           const Icon = item.icon;
           return (
@@ -164,41 +178,48 @@ export function UsersView() {
             aria-label="Cari user"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Cari nama, email, atau tenant…"
+            placeholder="Cari nama, email, atau workspace…"
             className="pl-10"
           />
         </div>
         <p className="text-[10px] text-muted">
-          {cmsCount} dari {users.length} user dapat masuk CMS
+          {cmsCount} dari {accounts.length} user dapat masuk CMS
         </p>
       </div>
 
       <div className="mt-4 overflow-hidden rounded-[1.75rem] border border-border bg-white">
-        <div className="hidden grid-cols-[minmax(0,1.6fr)_0.55fr_0.7fr_0.9fr_0.55fr_7.5rem] items-center gap-4 border-b border-border bg-surface-2/40 px-6 py-3 text-[10px] uppercase tracking-[0.14em] text-muted xl:grid">
+        <div className="hidden grid-cols-[minmax(0,1.4fr)_0.5fr_minmax(0,1fr)_0.8fr_0.7fr_0.45fr_7rem] items-center gap-4 border-b border-border bg-surface-2/40 px-6 py-3 text-[10px] uppercase tracking-[0.14em] text-muted xl:grid">
           <span>User</span>
           <span>Role</span>
-          <span>Tenant</span>
+          <span>Workspace</span>
+          <span>Default</span>
           <span>Akses CMS</span>
           <span>Aktif</span>
           <span className="text-right">Aksi</span>
         </div>
 
-        {filtered.map((user) => {
-          const isSuperadmin = user.role === "SUPERADMIN";
-          const hasAccess = isSuperadmin || user.cmsAccess;
+        {filtered.map((account) => {
+          const isSuperadmin = account.role === "SUPERADMIN";
+          const hasAccess = isSuperadmin || account.cmsAccess;
+          const accountMemberships = membershipsFor(account.id);
+          const defaultWorkspace = workspaces.find(
+            (workspace) => workspace.id === account.defaultWorkspaceId,
+          );
           return (
             <div
-              key={user.id}
-              className="grid gap-3 border-b border-border/60 px-6 py-4 last:border-b-0 xl:grid-cols-[minmax(0,1.6fr)_0.55fr_0.7fr_0.9fr_0.55fr_7.5rem] xl:items-center xl:gap-4"
+              key={account.id}
+              className="grid gap-3 border-b border-border/60 px-6 py-4 last:border-b-0 xl:grid-cols-[minmax(0,1.4fr)_0.5fr_minmax(0,1fr)_0.8fr_0.7fr_0.45fr_7rem] xl:items-center xl:gap-4"
             >
               <div className="flex items-center gap-2.5">
                 <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-ink text-xs font-semibold text-canvas">
-                  {user.fullName.slice(0, 1).toUpperCase()}
+                  {account.fullName.slice(0, 1).toUpperCase()}
                 </span>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-ink">{user.fullName}</p>
-                  <p className="truncate text-[10px] text-muted">{user.email}</p>
-                  <p className="text-[9px] text-muted/70">Dibuat {formatDate(user.createdAt)}</p>
+                  <p className="truncate text-sm font-medium text-ink">{account.fullName}</p>
+                  <p className="truncate text-[10px] text-muted">{account.email}</p>
+                  <p className="text-[9px] text-muted/70">
+                    Dibuat {formatDate(account.createdAt)}
+                  </p>
                 </div>
               </div>
 
@@ -207,15 +228,32 @@ export function UsersView() {
                   isSuperadmin ? "bg-ink text-canvas" : "bg-accent-soft text-accent-strong"
                 }`}
               >
-                {user.role}
+                {account.role}
               </span>
 
-              <div>
-                <p className="whitespace-nowrap text-xs text-muted">{user.tenantName}</p>
-                <p className="whitespace-nowrap text-[9px] text-muted/70">
-                  {formatTokens(tenantBalance(user))} token
-                </p>
+              <div className="flex flex-wrap gap-1">
+                {accountMemberships.length === 0 ? (
+                  <span className="text-[10px] text-muted">Belum ada</span>
+                ) : (
+                  accountMemberships.map(({ membership, workspace }) => (
+                    <span
+                      key={membership.id}
+                      className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[9px] text-muted"
+                    >
+                      {workspace?.name} ({formatWorkspaceRole(membership.role)})
+                      {account.defaultWorkspaceId === membership.workspaceId ? (
+                        <span className="rounded-full bg-canvas-2 px-1 text-[8px] text-ink">
+                          default
+                        </span>
+                      ) : null}
+                    </span>
+                  ))
+                )}
               </div>
+
+              <p className="truncate whitespace-nowrap text-xs text-muted">
+                {defaultWorkspace?.name ?? "—"}
+              </p>
 
               {isSuperadmin ? (
                 <span className="inline-flex w-fit items-center gap-1 rounded-full bg-success/10 px-2 py-1 text-[10px] font-medium text-success">
@@ -225,12 +263,12 @@ export function UsersView() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => setAccessTarget(user)}
+                  onClick={() => setAccessTarget(account)}
                   aria-pressed={hasAccess}
                   aria-label={
                     hasAccess
-                      ? `Cabut akses CMS ${user.fullName}`
-                      : `Beri akses CMS ${user.fullName}`
+                      ? `Cabut akses CMS ${account.fullName}`
+                      : `Beri akses CMS ${account.fullName}`
                   }
                   className={`inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium transition-colors ${
                     hasAccess
@@ -249,25 +287,25 @@ export function UsersView() {
 
               <button
                 type="button"
-                onClick={() => toggleUser(user.id)}
-                aria-pressed={user.isActive}
+                onClick={() => toggleAccount(account.id)}
+                aria-pressed={account.isActive}
                 className={`relative h-6 w-11 rounded-full transition-colors ${
-                  user.isActive ? "bg-success" : "bg-ink/15"
+                  account.isActive ? "bg-success" : "bg-ink/15"
                 }`}
-                aria-label={`${user.isActive ? "Nonaktifkan" : "Aktifkan"} ${user.fullName}`}
+                aria-label={`${account.isActive ? "Nonaktifkan" : "Aktifkan"} ${account.fullName}`}
               >
                 <span
                   className={`absolute left-0.5 top-0.5 size-5 rounded-full bg-white shadow transition-transform ${
-                    user.isActive ? "translate-x-5" : "translate-x-0"
+                    account.isActive ? "translate-x-5" : "translate-x-0"
                   }`}
                 />
               </button>
 
               <Link
-                href="/tenants"
+                href="/workspaces"
                 className="inline-flex items-center gap-1 justify-self-end text-[11px] font-medium text-ink transition-colors hover:text-accent-strong"
               >
-                Kelola tenant
+                Kelola workspace
                 <ArrowRight className="size-3.5" aria-hidden />
               </Link>
             </div>
@@ -278,7 +316,7 @@ export function UsersView() {
       <Dialog
         open={createOpen}
         title="Daftarkan user baru"
-        description="Default role USER. Token dan Plan Mode mengikuti kantong tenant."
+        description="Akun baru otomatis mendapat satu workspace personal dengan saldo 0."
         onClose={() => setCreateOpen(false)}
         footer={
           <>
@@ -310,34 +348,21 @@ export function UsersView() {
               placeholder="nama@alfateve.co.id"
             />
           </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Role" htmlFor="user-role">
-              <Select
-                id="user-role"
-                value={role}
-                onChange={(value) => setRole(value as Role)}
-                options={[
-                  { value: "USER", label: "USER (creator)" },
-                  { value: "SUPERADMIN", label: "SUPERADMIN" },
-                ]}
-              />
-            </Field>
-            <Field label="Tenant" htmlFor="user-tenant">
-              <Select
-                id="user-tenant"
-                value={tenantId}
-                onChange={setTenantId}
-                options={tenants.map((tenant) => ({
-                  value: tenant.id,
-                  label: tenant.name,
-                }))}
-              />
-            </Field>
-          </div>
+          <Field label="Role" htmlFor="user-role">
+            <Select
+              id="user-role"
+              value={role}
+              onChange={(value) => setRole(value as Role)}
+              options={[
+                { value: "USER", label: "USER (creator)" },
+                { value: "SUPERADMIN", label: "SUPERADMIN" },
+              ]}
+            />
+          </Field>
           <p className="rounded-xl border border-border bg-surface-2/60 px-3 py-2 text-[11px] leading-relaxed text-muted">
-            Token dan Plan Mode diambil dari saldo tenant. Atur saldo di menu{" "}
-            <Link href="/tenants" className="font-medium text-ink hover:text-accent-strong">
-              Tenants
+            Workspace personal dibuat otomatis. Saldo dan Plan Mode diatur di menu{" "}
+            <Link href="/workspaces" className="font-medium text-ink hover:text-accent-strong">
+              Workspaces
             </Link>
             .
           </p>

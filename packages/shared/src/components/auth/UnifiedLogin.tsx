@@ -99,7 +99,7 @@ export function UnifiedLogin({
 
           <div className="mt-8 grid grid-cols-3 gap-3">
             {[
-              { value: "4.000", label: "saldo tenant" },
+              { value: "4.000", label: "saldo workspace" },
               { value: "250×", label: "plan gratis" },
               { value: "1", label: "workspace" },
             ].map((item) => (
@@ -155,7 +155,7 @@ export function UnifiedLogin({
                 Halo, {session.user.fullName}.
               </h3>
               <p className="mt-1 text-sm text-muted">
-                {session.user.email} · {session.user.tenantName}
+                {session.user.email} · {session.workspace.name}
               </p>
 
               <div className="mt-4 flex flex-wrap gap-2">

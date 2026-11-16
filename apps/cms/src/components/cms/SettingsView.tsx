@@ -72,7 +72,7 @@ function SettingsForm() {
         <span className="mono-label text-accent-strong">Konfigurasi</span>
         <h1 className="display mt-2 text-[clamp(2.2rem,4vw,3.4rem)] text-ink">Settings</h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted">
-          Atur kontak admin yang dihubungi calon tenant dari tombol “Butuh akses?” di halaman
+          Atur kontak admin yang dihubungi calon workspace dari tombol “Butuh akses?” di halaman
           login Creator.
         </p>
       </header>
@@ -159,8 +159,8 @@ function SettingsForm() {
 
           <div className="mt-5 rounded-2xl border border-border bg-surface-2/60 p-4">
             <p className="text-xs leading-relaxed text-muted">
-              Calon tenant mengisi form di halaman request akses. Setelah menekan tombol kirim,
-              WhatsApp akan terbuka dengan pesan yang sudah terisi.
+              Calon workspace mengisi form di halaman request akses. Setelah menekan tombol
+              kirim, WhatsApp akan terbuka dengan pesan yang sudah terisi.
             </p>
             <div className="mt-3 rounded-xl border border-border bg-white px-3 py-2.5">
               <p className="mono-label text-[8px] text-muted">Tujuan WhatsApp</p>

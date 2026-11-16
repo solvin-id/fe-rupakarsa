@@ -2,28 +2,51 @@
 
 import { create } from "zustand";
 
-import { grantCmsAccessOverride, revokeCmsAccessOverride } from "../lib/cms-access-cookie";
-import { SEED_MODELS, SEED_PROVIDERS, SEED_TENANTS, SEED_USERS } from "../lib/seed";
-import { readJson, STORAGE_KEYS, writeJson } from "../lib/storage";
-import { upsertTenantWallet } from "../lib/tenant-wallet-cookie";
+import { readAccountsCookie, writeAccountsCookie } from "../lib/accounts-cookie";
+import { ensurePlatformSeeded } from "../lib/platform-seed";
+import {
+  SEED_ACCOUNTS,
+  SEED_JOIN_REQUESTS,
+  SEED_MEMBERSHIPS,
+  SEED_MODELS,
+  SEED_PROVIDERS,
+  SEED_WORKSPACES,
+} from "../lib/seed";
+import { slugify } from "../lib/slug";
+import { cleanupLegacyStorage, readJson, STORAGE_KEYS, writeJson } from "../lib/storage";
 import type {
-  AdminSnapshot,
   AiModel,
   AiProvider,
+  CatalogSnapshot,
   MediaType,
   ModelAllowedParams,
   ProviderCode,
+  Result,
   Role,
-  Tenant,
   User,
+  WorkspaceRegistry,
 } from "../lib/types";
+import { readWorkspaceRegistry, writeWorkspaceRegistry } from "../lib/workspaces-cookie";
 import { useSessionStore } from "./session-store";
+import { useWorkspaceStore } from "./workspace-store";
 
-interface CreateUserInput {
+const STORAGE_FULL_MESSAGE = "Penyimpanan demo penuh. Hapus workspace yang tidak dipakai.";
+
+function restoreRegistry(previous: WorkspaceRegistry | null): void {
+  writeWorkspaceRegistry(
+    previous ?? {
+      workspaces: SEED_WORKSPACES,
+      memberships: SEED_MEMBERSHIPS,
+      requests: SEED_JOIN_REQUESTS,
+    },
+  );
+  useWorkspaceStore.getState().hydrate();
+}
+
+interface CreateAccountInput {
   fullName: string;
   email: string;
   role: Role;
-  tenantId: string;
   cmsAccess: boolean;
 }
 
@@ -45,70 +68,144 @@ interface CreateModelInput {
   isActive: boolean;
 }
 
-interface CreateTenantInput {
-  name: string;
-  slug: string;
-  tokenBalance: number;
-  freePlanRemaining: number;
-  isActive: boolean;
-}
-
 interface AdminState {
-  tenants: Tenant[];
-  users: User[];
+  accounts: User[];
   providers: AiProvider[];
   models: AiModel[];
   hydrated: boolean;
   hydrate: () => void;
+  refreshAccounts: () => void;
+  getAccount: (id: string) => User | undefined;
+  getAccountByEmail: (email: string) => User | undefined;
+  createAccount: (input: CreateAccountInput) => Result<User>;
+  toggleAccount: (id: string) => void;
+  setCmsAccess: (id: string, value: boolean) => void;
   updateProvider: (code: ProviderCode, patch: Partial<AiProvider>) => void;
   toggleProvider: (code: ProviderCode) => void;
   updateModel: (id: string, patch: Partial<AiModel>) => void;
   toggleModel: (id: string) => void;
   createProvider: (input: CreateProviderInput) => AiProvider | null;
   createModel: (input: CreateModelInput) => AiModel | null;
-  createTenant: (input: CreateTenantInput) => Tenant | null;
-  topUpTenant: (id: string, amount: number, freePlan: number) => void;
-  toggleTenant: (id: string) => void;
-  createUser: (input: CreateUserInput) => User | null;
-  toggleUser: (id: string) => void;
-  setCmsAccess: (id: string, value: boolean) => void;
 }
 
-function persist(
-  tenants: Tenant[],
-  users: User[],
-  providers: AiProvider[],
-  models: AiModel[],
-): void {
-  writeJson<AdminSnapshot>(STORAGE_KEYS.admin, { tenants, users, providers, models });
+function persistCatalog(providers: AiProvider[], models: AiModel[]): void {
+  writeJson<CatalogSnapshot>(STORAGE_KEYS.catalog, { providers, models });
 }
 
 export const useAdminStore = create<AdminState>()((set, get) => ({
-  tenants: [],
-  users: [],
+  accounts: [],
   providers: [],
   models: [],
   hydrated: false,
 
   hydrate: () => {
-    const stored = readJson<AdminSnapshot | null>(STORAGE_KEYS.admin, null);
-    if (!stored?.users || !stored?.providers || !stored?.models) {
-      set({
-        tenants: SEED_TENANTS,
-        users: SEED_USERS,
-        providers: SEED_PROVIDERS,
-        models: SEED_MODELS,
-        hydrated: true,
-      });
+    cleanupLegacyStorage();
+    ensurePlatformSeeded();
+
+    let accounts = readAccountsCookie();
+    if (!accounts) {
+      accounts = SEED_ACCOUNTS;
+      writeAccountsCookie(accounts);
+    }
+
+    const catalog = readJson<CatalogSnapshot | null>(STORAGE_KEYS.catalog, null);
+    if (!catalog?.providers || !catalog?.models) {
+      persistCatalog(SEED_PROVIDERS, SEED_MODELS);
+      set({ accounts, providers: SEED_PROVIDERS, models: SEED_MODELS, hydrated: true });
       return;
     }
-    set({
-      tenants: stored.tenants ?? SEED_TENANTS,
-      users: stored.users,
-      providers: stored.providers,
-      models: stored.models,
-      hydrated: true,
+    set({ accounts, providers: catalog.providers, models: catalog.models, hydrated: true });
+  },
+
+  refreshAccounts: () => {
+    const accounts = readAccountsCookie();
+    if (!accounts) {
+      get().hydrate();
+      return;
+    }
+    set({ accounts });
+  },
+
+  getAccount: (id) => get().accounts.find((account) => account.id === id),
+
+  getAccountByEmail: (email) => {
+    const normalized = email.trim().toLowerCase();
+    return get().accounts.find((account) => account.email === normalized);
+  },
+
+  createAccount: (input) => {
+    const fullName = input.fullName.trim();
+    const email = input.email.trim().toLowerCase();
+    if (fullName.length < 2) return { ok: false, message: "Nama minimal 2 karakter." };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return { ok: false, message: "Format email tidak valid." };
+    }
+
+    const accounts = readAccountsCookie() ?? SEED_ACCOUNTS;
+    if (accounts.some((account) => account.email === email)) {
+      return { ok: false, message: "Email sudah terdaftar." };
+    }
+
+    const userId = `usr_${crypto.randomUUID().slice(0, 8)}`;
+    const account: User = {
+      id: userId,
+      defaultWorkspaceId: "",
+      email,
+      fullName,
+      role: input.role,
+      cmsAccess: input.role === "SUPERADMIN" ? true : input.cmsAccess,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+    };
+
+    // The workspace guard requires an existing owner, so the account is persisted first.
+    if (!writeAccountsCookie([account, ...accounts])) {
+      return { ok: false, message: STORAGE_FULL_MESSAGE };
+    }
+
+    const previousRegistry = readWorkspaceRegistry();
+    useWorkspaceStore.getState().hydrate();
+    const created = useWorkspaceStore.getState().createWorkspace({
+      name: `${fullName} Workspace`,
+      slug: `${slugify(fullName)}-${userId.slice(-4)}`,
+      ownerId: userId,
     });
+    if (!created.ok) {
+      writeAccountsCookie(accounts);
+      restoreRegistry(previousRegistry);
+      return { ok: false, message: created.message };
+    }
+
+    const createdAccount: User = { ...account, defaultWorkspaceId: created.value.id };
+    const nextAccounts = [createdAccount, ...accounts];
+    if (!writeAccountsCookie(nextAccounts)) {
+      writeAccountsCookie(accounts);
+      restoreRegistry(previousRegistry);
+      return { ok: false, message: STORAGE_FULL_MESSAGE };
+    }
+
+    set({ accounts: nextAccounts });
+    return { ok: true, value: createdAccount };
+  },
+
+  toggleAccount: (id) => {
+    const accounts = get().accounts.map((account) =>
+      account.id === id ? { ...account, isActive: !account.isActive } : account,
+    );
+    if (!writeAccountsCookie(accounts)) return;
+    set({ accounts });
+
+    const updated = accounts.find((account) => account.id === id);
+    if (updated) useSessionStore.getState().updateUser({ isActive: updated.isActive });
+  },
+
+  setCmsAccess: (id, value) => {
+    const accounts = get().accounts.map((account) =>
+      account.id === id ? { ...account, cmsAccess: value } : account,
+    );
+    if (!writeAccountsCookie(accounts)) return;
+    set({ accounts });
+    useSessionStore.getState().updateUser({ cmsAccess: value });
   },
 
   updateProvider: (code, patch) => {
@@ -117,7 +214,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
         ? { ...provider, ...patch, updatedAt: new Date().toISOString() }
         : provider,
     );
-    persist(get().tenants, get().users, providers, get().models);
+    persistCatalog(providers, get().models);
     set({ providers });
   },
 
@@ -127,13 +224,13 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
         ? { ...provider, isActive: !provider.isActive, updatedAt: new Date().toISOString() }
         : provider,
     );
-    persist(get().tenants, get().users, providers, get().models);
+    persistCatalog(providers, get().models);
     set({ providers });
   },
 
   updateModel: (id, patch) => {
     const models = get().models.map((model) => (model.id === id ? { ...model, ...patch } : model));
-    persist(get().tenants, get().users, get().providers, models);
+    persistCatalog(get().providers, models);
     set({ models });
   },
 
@@ -141,7 +238,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
     const models = get().models.map((model) =>
       model.id === id ? { ...model, isActive: !model.isActive } : model,
     );
-    persist(get().tenants, get().users, get().providers, models);
+    persistCatalog(get().providers, models);
     set({ models });
   },
 
@@ -159,7 +256,7 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
       updatedAt: new Date().toISOString(),
     };
     const providers = [...get().providers, provider];
-    persist(get().tenants, get().users, providers, get().models);
+    persistCatalog(providers, get().models);
     set({ providers });
     return provider;
   },
@@ -186,126 +283,8 @@ export const useAdminStore = create<AdminState>()((set, get) => ({
       isActive: input.isActive,
     };
     const models = [...get().models, model];
-    persist(get().tenants, get().users, get().providers, models);
+    persistCatalog(get().providers, models);
     set({ models });
     return model;
-  },
-
-  createTenant: (input) => {
-    const slug = input.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
-    if (!slug || get().tenants.some((tenant) => tenant.slug === slug)) return null;
-
-    const tenant: Tenant = {
-      id: `ten_${crypto.randomUUID().slice(0, 8)}`,
-      name: input.name.trim(),
-      slug,
-      tokenBalance: Math.max(0, Math.round(input.tokenBalance)),
-      freePlanRemaining: Math.max(0, Math.round(input.freePlanRemaining)),
-      isActive: input.isActive,
-      createdAt: new Date().toISOString(),
-    };
-    const tenants = [...get().tenants, tenant];
-    persist(tenants, get().users, get().providers, get().models);
-    set({ tenants });
-    upsertTenantWallet(tenant.id, {
-      tokenBalance: tenant.tokenBalance,
-      freePlanRemaining: tenant.freePlanRemaining,
-      isActive: tenant.isActive,
-    });
-    return tenant;
-  },
-
-  topUpTenant: (id, amount, freePlan) => {
-    const tenants = get().tenants.map((tenant) =>
-      tenant.id === id
-        ? {
-            ...tenant,
-            tokenBalance: Math.max(0, tenant.tokenBalance + amount),
-            freePlanRemaining: Math.max(0, tenant.freePlanRemaining + freePlan),
-          }
-        : tenant,
-    );
-    persist(tenants, get().users, get().providers, get().models);
-    set({ tenants });
-
-    const updated = tenants.find((tenant) => tenant.id === id);
-    if (updated) {
-      upsertTenantWallet(updated.id, {
-        tokenBalance: updated.tokenBalance,
-        freePlanRemaining: updated.freePlanRemaining,
-        isActive: updated.isActive,
-      });
-      useSessionStore.getState().updateTenant(id, {
-        tokenBalance: updated.tokenBalance,
-        freePlanRemaining: updated.freePlanRemaining,
-      });
-    }
-  },
-
-  toggleTenant: (id) => {
-    const tenants = get().tenants.map((tenant) =>
-      tenant.id === id ? { ...tenant, isActive: !tenant.isActive } : tenant,
-    );
-    persist(tenants, get().users, get().providers, get().models);
-    set({ tenants });
-
-    const updated = tenants.find((tenant) => tenant.id === id);
-    if (updated) {
-      upsertTenantWallet(updated.id, {
-        tokenBalance: updated.tokenBalance,
-        freePlanRemaining: updated.freePlanRemaining,
-        isActive: updated.isActive,
-      });
-      useSessionStore.getState().updateTenant(id, { isActive: updated.isActive });
-    }
-  },
-
-  createUser: (input) => {
-    const email = input.email.trim().toLowerCase();
-    if (get().users.some((user) => user.email === email)) return null;
-    const tenant = get().tenants.find((item) => item.id === input.tenantId);
-    const user: User = {
-      id: `usr_${crypto.randomUUID().slice(0, 8)}`,
-      tenantId: input.tenantId,
-      tenantName: tenant?.name ?? "Tenant",
-      email,
-      fullName: input.fullName.trim(),
-      role: input.role,
-      cmsAccess: input.role === "SUPERADMIN" ? true : input.cmsAccess,
-      isActive: true,
-      createdAt: new Date().toISOString(),
-    };
-    const users = [user, ...get().users];
-    persist(get().tenants, users, get().providers, get().models);
-    set({ users });
-    if (user.cmsAccess) grantCmsAccessOverride(user.id);
-    return user;
-  },
-
-  toggleUser: (id) => {
-    const users = get().users.map((user) =>
-      user.id === id ? { ...user, isActive: !user.isActive } : user,
-    );
-    persist(get().tenants, users, get().providers, get().models);
-    set({ users });
-
-    const updated = users.find((user) => user.id === id);
-    if (updated) {
-      useSessionStore.getState().updateUser(id, { isActive: updated.isActive });
-    }
-  },
-
-  setCmsAccess: (id, value) => {
-    const users = get().users.map((user) =>
-      user.id === id ? { ...user, cmsAccess: value } : user,
-    );
-    persist(get().tenants, users, get().providers, get().models);
-    set({ users });
-    if (value) {
-      grantCmsAccessOverride(id);
-    } else {
-      revokeCmsAccessOverride(id);
-    }
-    useSessionStore.getState().updateUser(id, { cmsAccess: value });
   },
 }));

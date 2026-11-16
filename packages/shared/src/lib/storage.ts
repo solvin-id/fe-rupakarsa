@@ -1,8 +1,6 @@
 export const STORAGE_KEYS = {
-  sessionCreator: "rupakarsa.session.creator",
-  sessionCms: "rupakarsa.session.cms",
-  workspace: "rupakarsa.workspace",
-  admin: "rupakarsa.admin",
+  workspace: "rupakarsa.workspace.v2",
+  catalog: "rupakarsa.catalog",
 } as const;
 
 export function readJson<T>(key: string, fallback: T): T {
@@ -32,4 +30,15 @@ export function removeKey(key: string): void {
   } catch {
     // Ignore storage failures.
   }
+}
+
+const LEGACY_KEYS = [
+  "rupakarsa.admin",
+  "rupakarsa.workspace",
+  "rupakarsa.session.creator",
+  "rupakarsa.session.cms",
+];
+
+export function cleanupLegacyStorage(): void {
+  for (const key of LEGACY_KEYS) removeKey(key);
 }

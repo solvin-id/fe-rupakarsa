@@ -1,10 +1,14 @@
 export type Role = "USER" | "SUPERADMIN";
-export type SessionSurface = "creator" | "cms";
+export type WorkspaceRole = "OWNER" | "ADMIN" | "MEMBER";
+export type JoinRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type MediaType = "VIDEO" | "IMAGE";
 export type GenerationStatus = "QUEUED" | "RENDERING" | "COMPLETED" | "FAILED";
 export type ProviderCode = string;
 
-export interface Tenant {
+export type ActionResult = { ok: true } | { ok: false; message: string };
+export type Result<T> = { ok: true; value: T } | { ok: false; message: string };
+
+export interface Workspace {
   id: string;
   name: string;
   slug: string;
@@ -14,10 +18,34 @@ export interface Tenant {
   createdAt: string;
 }
 
+export interface WorkspaceMembership {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  role: WorkspaceRole;
+  joinedAt: string;
+}
+
+export interface WorkspaceJoinRequest {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  message: string;
+  status: JoinRequestStatus;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedByUserId: string | null;
+}
+
+export interface WorkspaceRegistry {
+  workspaces: Workspace[];
+  memberships: WorkspaceMembership[];
+  requests: WorkspaceJoinRequest[];
+}
+
 export interface User {
   id: string;
-  tenantId: string;
-  tenantName: string;
+  defaultWorkspaceId: string;
   email: string;
   fullName: string;
   role: Role;
@@ -28,13 +56,19 @@ export interface User {
 
 export interface Session {
   user: User;
-  tenant: Tenant;
+  workspace: Workspace;
+  signedInAt: string;
+}
+
+export interface SessionCookie {
+  userId: string;
+  workspaceId: string;
   signedInAt: string;
 }
 
 export interface Folder {
   id: string;
-  tenantId: string;
+  workspaceId: string;
   userId: string;
   name: string;
   description: string;
@@ -50,6 +84,7 @@ export interface GenerationParams {
 
 export interface Generation {
   id: string;
+  workspaceId: string;
   folderId: string;
   userId: string;
   modelId: string;
@@ -113,9 +148,7 @@ export interface WorkspaceSnapshot {
   generations: Generation[];
 }
 
-export interface AdminSnapshot {
-  tenants: Tenant[];
-  users: User[];
+export interface CatalogSnapshot {
   providers: AiProvider[];
   models: AiModel[];
 }

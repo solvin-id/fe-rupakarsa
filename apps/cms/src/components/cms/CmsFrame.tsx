@@ -22,6 +22,7 @@ import { hasCmsAccess } from "@rupakarsa/shared/lib/auth";
 import { formatTokens } from "@rupakarsa/shared/lib/format";
 import { useAdminStore } from "@rupakarsa/shared/stores/admin-store";
 import { useSessionStore } from "@rupakarsa/shared/stores/session-store";
+import { useWorkspaceStore } from "@rupakarsa/shared/stores/workspace-store";
 import { SurfaceSwitcher } from "@rupakarsa/shared/surface";
 import { Button, ToastViewport } from "@rupakarsa/shared/ui";
 
@@ -30,7 +31,7 @@ const CMS_URL = process.env.NEXT_PUBLIC_CMS_URL ?? "http://localhost:3001";
 
 const NAV = [
   { href: "/overview", label: "Overview", icon: LayoutGrid },
-  { href: "/tenants", label: "Tenants", icon: Building2 },
+  { href: "/workspaces", label: "Workspaces", icon: Building2 },
   { href: "/users", label: "Users & akses", icon: Users },
   { href: "/providers", label: "Providers", icon: KeyRound },
   { href: "/models", label: "Models & tarif", icon: Settings2 },
@@ -51,21 +52,41 @@ export function CmsFrame({ children }: { children: React.ReactNode }) {
   const signOut = useSessionStore((state) => state.signOut);
   const hydrateAdmin = useAdminStore((state) => state.hydrate);
   const adminHydrated = useAdminStore((state) => state.hydrated);
-  const tenants = useAdminStore((state) => state.tenants);
+  const hydrateWorkspaces = useWorkspaceStore((state) => state.hydrate);
+  const workspaceHydrated = useWorkspaceStore((state) => state.hydrated);
+  const workspaces = useWorkspaceStore((state) => state.workspaces);
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    hydrateSession();
     hydrateAdmin();
+    hydrateWorkspaces();
+    hydrateSession();
     refreshAccess();
-  }, [hydrateSession, hydrateAdmin, refreshAccess]);
+  }, [hydrateAdmin, hydrateWorkspaces, hydrateSession, refreshAccess]);
+
+  useEffect(() => {
+    function syncPlatform(): void {
+      useWorkspaceStore.getState().refresh();
+      useAdminStore.getState().refreshAccounts();
+      useSessionStore.getState().refreshAccess();
+    }
+    function handleVisibility(): void {
+      if (document.visibilityState === "visible") syncPlatform();
+    }
+    window.addEventListener("focus", syncPlatform);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("focus", syncPlatform);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     if (hydrated && !session) router.replace("/login");
   }, [hydrated, session, router]);
 
-  if (!hydrated || !adminHydrated) {
+  if (!hydrated || !adminHydrated || !workspaceHydrated) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-canvas">
         <span className="size-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
@@ -83,7 +104,7 @@ export function CmsFrame({ children }: { children: React.ReactNode }) {
 
   const user = session.user;
   const allowed = hasCmsAccess(user);
-  const activeTenants = tenants.filter((tenant) => tenant.isActive).length;
+  const activeWorkspaces = workspaces.filter((workspace) => workspace.isActive).length;
 
   function handleSignOut(): void {
     signOut();
@@ -149,9 +170,9 @@ export function CmsFrame({ children }: { children: React.ReactNode }) {
         })}
 
         <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2.5">
-          <p className="mono-label text-[8px] text-canvas/35">Tenant aktif</p>
-          <p className="mt-1 text-lg font-semibold text-canvas">{formatTokens(activeTenants)}</p>
-          <p className="text-[9px] text-canvas/40">Kantong token per tenant</p>
+          <p className="mono-label text-[8px] text-canvas/35">Workspace aktif</p>
+          <p className="mt-1 text-lg font-semibold text-canvas">{formatTokens(activeWorkspaces)}</p>
+          <p className="text-[9px] text-canvas/40">Kantong token per workspace</p>
         </div>
       </nav>
 
@@ -236,7 +257,9 @@ export function CmsFrame({ children }: { children: React.ReactNode }) {
                 <LayoutGrid className="size-3.5" aria-hidden />
                 <span>CMS</span>
                 <ChevronRight className="size-3" aria-hidden />
-                <span className="text-ink">{user.tenantName}</span>
+                <span className="text-ink">
+                  {user.role === "SUPERADMIN" ? "Superadmin" : "CMS access"}
+                </span>
               </div>
             </div>
 

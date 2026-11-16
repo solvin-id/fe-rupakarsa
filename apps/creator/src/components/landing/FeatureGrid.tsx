@@ -90,7 +90,8 @@ export function FeatureGrid() {
             <Sparkles className="size-4" aria-hidden />
           </span>
           <p className="text-sm text-ink">
-            Isolasi data per tenant sejak database pertama. Setiap tim bekerja di ruangnya sendiri.
+            Isolasi data per workspace sejak database pertama. Setiap tim bekerja di ruangnya
+            sendiri.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted/70">

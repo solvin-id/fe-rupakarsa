@@ -1,12 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { authorizeSignIn, hasCmsAccess } from "@rupakarsa/shared/lib/auth";
-import { SEED_USERS } from "@rupakarsa/shared/lib/seed";
+import {
+  authorizeSignIn,
+  canManageWorkspace,
+  hasCmsAccess,
+  isWorkspaceOwner,
+} from "@rupakarsa/shared/lib/auth";
+import { SEED_ACCOUNTS } from "@rupakarsa/shared/lib/seed";
 
-const admin = SEED_USERS.find((user) => user.id === "usr_admin");
-const creator = SEED_USERS.find((user) => user.id === "usr_demo");
+const admin = SEED_ACCOUNTS.find((account) => account.id === "usr_admin");
+const creator = SEED_ACCOUNTS.find((account) => account.id === "usr_demo");
 
-if (!admin || !creator) throw new Error("Seed users are missing");
+if (!admin || !creator) throw new Error("Seed accounts are missing");
 
 describe("CMS access", () => {
   it("gives Superadmin implicit CMS access", () => {
@@ -47,5 +52,21 @@ describe("authorizeSignIn", () => {
     const result = authorizeSignIn(null);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain("tidak ditemukan");
+  });
+});
+
+describe("workspace roles", () => {
+  it("reserves destructive controls for the owner", () => {
+    expect(isWorkspaceOwner("OWNER")).toBe(true);
+    expect(isWorkspaceOwner("ADMIN")).toBe(false);
+    expect(isWorkspaceOwner("MEMBER")).toBe(false);
+    expect(isWorkspaceOwner(null)).toBe(false);
+  });
+
+  it("lets owner and admin manage members", () => {
+    expect(canManageWorkspace("OWNER")).toBe(true);
+    expect(canManageWorkspace("ADMIN")).toBe(true);
+    expect(canManageWorkspace("MEMBER")).toBe(false);
+    expect(canManageWorkspace(undefined)).toBe(false);
   });
 });

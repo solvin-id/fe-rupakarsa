@@ -67,7 +67,7 @@ function RequestForm() {
       return;
     }
     if (company.trim().length < 2) {
-      setError("Nama tenant atau perusahaan minimal 2 karakter.");
+      setError("Nama workspace atau perusahaan minimal 2 karakter.");
       return;
     }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
@@ -83,7 +83,7 @@ function RequestForm() {
       `Halo ${contact.name}, saya ingin mengajukan akses/kerja sama Rupakarsa.`,
       "",
       `Nama: ${name.trim()}`,
-      `Tenant/Perusahaan: ${company.trim()}`,
+      `Workspace/Perusahaan: ${company.trim()}`,
       `Email: ${email.trim()}`,
       `WhatsApp: ${whatsapp.trim()}`,
       `Pesan: ${message.trim() || "-"}`,
@@ -129,7 +129,7 @@ function RequestForm() {
             {[
               { value: "1", label: "workspace" },
               { value: "Plan", label: "→ Implement" },
-              { value: "Token", label: "per tenant" },
+              { value: "Token", label: "per workspace" },
             ].map((item) => (
               <div key={item.label} className="rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-3">
                 <p className="text-lg font-semibold tracking-[-0.03em] text-canvas">{item.value}</p>
@@ -222,7 +222,7 @@ function RequestForm() {
                     required
                   />
                 </Field>
-                <Field label="Tenant / perusahaan" htmlFor="request-company">
+                <Field label="Workspace / perusahaan" htmlFor="request-company">
                   <TextInput
                     id="request-company"
                     value={company}

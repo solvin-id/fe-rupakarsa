@@ -78,10 +78,10 @@ export function ProjectsView() {
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
 
-  const tenantId = session?.user.tenantId;
+  const workspaceId = session?.workspace.id;
   const visibleFolders = useMemo(
-    () => folders.filter((folder) => folder.tenantId === tenantId),
-    [folders, tenantId],
+    () => folders.filter((folder) => folder.workspaceId === workspaceId),
+    [folders, workspaceId],
   );
   const visibleFolderIds = useMemo(
     () => new Set(visibleFolders.map((folder) => folder.id)),
@@ -131,6 +131,7 @@ export function ProjectsView() {
       name: draftName,
       description: draftDescription,
       user: session.user,
+      workspaceId: session.workspace.id,
     });
     setCreateOpen(false);
     pushToast("success", `Folder "${folder.name}" dibuat.`);
@@ -169,8 +170,10 @@ export function ProjectsView() {
           <span className="mono-label text-accent-strong">Drive workspace</span>
           <h1 className="display mt-2 text-[clamp(2.2rem,4vw,3.4rem)] text-ink">Ruang kerja</h1>
           <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted">
-            Setiap folder menyimpan brief, aset referensi, plan, dan riwayat render. Pilih folder
-            untuk masuk ke studio.
+            Folder proyek di workspace{" "}
+            <span className="font-medium text-ink">{session?.workspace.name ?? "—"}</span>. Setiap
+            folder menyimpan brief, aset referensi, plan, dan riwayat render yang bisa dibuka semua
+            anggota workspace.
           </p>
         </div>
         <Button
@@ -252,7 +255,9 @@ export function ProjectsView() {
       {filtered.length === 0 ? (
         <div className="mt-6 rounded-[1.75rem] border border-dashed border-border-strong bg-white/40 px-6 py-16 text-center">
           <FolderPlus className="mx-auto size-7 text-muted" aria-hidden />
-          <p className="mt-3 text-sm font-medium text-ink">Belum ada folder yang cocok.</p>
+          <p className="mt-3 text-sm font-medium text-ink">
+            {query.trim() ? "Belum ada folder yang cocok." : "Belum ada folder di workspace ini."}
+          </p>
           <p className="mt-1 text-xs text-muted">Buat folder baru atau ubah kata kunci pencarian.</p>
           <Button variant="primary" size="sm" className="mt-4" onClick={openCreate}>
             Buat folder
