@@ -146,7 +146,7 @@ export function OverviewView() {
             <div>
               <p className="mono-label text-muted">Alur akses</p>
               <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-ink">
-                LMS → CMS
+                CREATOR → CMS
               </h2>
             </div>
           </div>
