@@ -25,9 +25,9 @@ const COLUMNS = [
   {
     title: "Legal",
     links: [
-      { label: "Privasi", href: "#" },
-      { label: "Ketentuan", href: "#" },
-      { label: "Keamanan", href: "#" },
+      { label: "Privasi", href: "/privacy" },
+      { label: "Ketentuan", href: "/terms" },
+      { label: "Keamanan", href: "/security" },
     ],
   },
 ];
