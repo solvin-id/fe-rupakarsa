@@ -11,6 +11,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  document.cookie = "rupakarsa_csrf=; Max-Age=0; Path=/";
 });
 
 describe("apiRequest", () => {
@@ -63,6 +64,61 @@ describe("apiRequest", () => {
       code: "CONFLICT",
       message: "Saldo token tidak cukup.",
     });
+  });
+
+  it("retries once with the csrf cookie a rejection issued", async () => {
+    const seen: Array<string | undefined> = [];
+    const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
+      seen.push((init.headers as Record<string, string> | undefined)?.["x-csrf-token"]);
+      if (seen.length === 1) {
+        // The server refused before running anything and handed out a token for the retry.
+        document.cookie = "rupakarsa_csrf=fresh-token";
+        return jsonResponse(
+          { error: { code: "CSRF_INVALID", message: "Token CSRF tidak valid. Muat ulang halaman." } },
+          403,
+        );
+      }
+      return jsonResponse({ id: "folder-1" });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const created = await apiRequest<{ id: string }>("/api/creator/folders", {
+      method: "POST",
+      body: { name: "Folder" },
+    });
+
+    expect(created).toEqual({ id: "folder-1" });
+    expect(seen).toEqual([undefined, "fresh-token"]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not retry a csrf rejection that carried a token", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse(
+        { error: { code: "CSRF_INVALID", message: "Token CSRF tidak valid. Muat ulang halaman." } },
+        403,
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    document.cookie = "rupakarsa_csrf=stale";
+
+    await expect(
+      apiRequest("/api/creator/folders", { method: "POST", body: { name: "Folder" } }),
+    ).rejects.toMatchObject({ status: 403, code: "CSRF_INVALID" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry other forbidden responses", async () => {
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({ error: { code: "FORBIDDEN", message: "Akun ini tidak memiliki akses CMS." } }, 403),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(apiRequest("/api/cms/accounts", { method: "POST", body: {} })).rejects.toMatchObject({
+      status: 403,
+      code: "FORBIDDEN",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("maps a network failure to status 0", async () => {

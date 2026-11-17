@@ -47,39 +47,58 @@ function readCsrfToken(): string | null {
   return null;
 }
 
+function csrfHeaders(method: string): Record<string, string> {
+  if (method === "GET") return {};
+  const csrf = readCsrfToken();
+  return csrf ? { "x-csrf-token": csrf } : {};
+}
+
+/**
+ * A CSRF rejection is refused before any handler runs, so one retry is safe — but only when the
+ * rejection actually handed out a token we did not send (the healing case). A mismatched token means
+ * the browser already had one and the retry would be an identical request.
+ */
+function shouldRetryCsrf(status: number, code: string, attempt: number, sent: string): boolean {
+  if (attempt !== 0 || status !== 403 || code !== "CSRF_INVALID") return false;
+  const issued = readCsrfToken();
+  return issued !== null && issued !== sent;
+}
+
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const { method = "GET", body, signal } = options;
-  const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
-  if (method !== "GET") {
-    const csrf = readCsrfToken();
-    if (csrf) headers["x-csrf-token"] = csrf;
-  }
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      method,
-      credentials: "include",
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal,
-    });
-  } catch {
-    throw new ApiError(0, "NETWORK_ERROR", "Tidak dapat menghubungi server.");
-  }
+  // The rejection carries a fresh csrf cookie for browsers that had none (sessions older than the
+  // cookie itself), so a single retry completes the action instead of asking for a page reload.
+  for (let attempt = 0; ; attempt += 1) {
+    const headers: Record<string, string> = {};
+    if (body !== undefined) headers["Content-Type"] = "application/json";
+    Object.assign(headers, csrfHeaders(method));
+    const sentCsrf = headers["x-csrf-token"] ?? "";
 
-  if (response.status === 204) return undefined as T;
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}${path}`, {
+        method,
+        credentials: "include",
+        headers,
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal,
+      });
+    } catch {
+      throw new ApiError(0, "NETWORK_ERROR", "Tidak dapat menghubungi server.");
+    }
 
-  const text = await response.text();
-  const parsed: unknown = text.length > 0 ? safeJson(text) : undefined;
+    if (response.status === 204) return undefined as T;
 
-  if (!response.ok) {
+    const text = await response.text();
+    const parsed: unknown = text.length > 0 ? safeJson(text) : undefined;
+
+    if (response.ok) return parsed as T;
+
     const { code, message } = errorFromBody(parsed);
+    if (shouldRetryCsrf(response.status, code, attempt, sentCsrf)) continue;
     throw new ApiError(response.status, code, message);
   }
-
-  return parsed as T;
 }
 
 function safeJson(text: string): unknown {
@@ -94,29 +113,28 @@ export async function apiUpload<T>(path: string, file: File): Promise<T> {
   const form = new FormData();
   form.append("file", file);
 
-  const headers: Record<string, string> = {};
-  const csrf = readCsrfToken();
-  if (csrf) headers["x-csrf-token"] = csrf;
+  for (let attempt = 0; ; attempt += 1) {
+    const headers = csrfHeaders("POST");
+    const sentCsrf = headers["x-csrf-token"] ?? "";
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE_URL}${path}`, {
+        method: "POST",
+        credentials: "include",
+        headers,
+        body: form,
+      });
+    } catch {
+      throw new ApiError(0, "NETWORK_ERROR", "Tidak dapat menghubungi server.");
+    }
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
-      method: "POST",
-      credentials: "include",
-      headers,
-      body: form,
-    });
-  } catch {
-    throw new ApiError(0, "NETWORK_ERROR", "Tidak dapat menghubungi server.");
-  }
+    const text = await response.text();
+    const parsed: unknown = text.length > 0 ? safeJson(text) : undefined;
 
-  const text = await response.text();
-  const parsed: unknown = text.length > 0 ? safeJson(text) : undefined;
+    if (response.ok) return parsed as T;
 
-  if (!response.ok) {
     const { code, message } = errorFromBody(parsed);
+    if (shouldRetryCsrf(response.status, code, attempt, sentCsrf)) continue;
     throw new ApiError(response.status, code, message);
   }
-
-  return parsed as T;
 }
