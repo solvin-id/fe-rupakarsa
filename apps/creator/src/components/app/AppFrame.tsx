@@ -20,6 +20,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Logo } from "@rupakarsa/shared/brand";
+import { useGenerationStream } from "@rupakarsa/shared/hooks/use-generation-stream";
 import { useLogoutMutation, usePublicConfigQuery, useSessionQuery } from "@rupakarsa/shared/hooks/use-session";
 import { useWorkspacesQuery } from "@rupakarsa/shared/hooks/use-workspaces";
 import { hasCmsAccess } from "@rupakarsa/shared/lib/auth";
@@ -29,6 +30,7 @@ import { SurfaceSwitcher } from "@rupakarsa/shared/surface";
 import { Button, ToastViewport } from "@rupakarsa/shared/ui";
 
 import { ChangePasswordDialog } from "@/components/app/ChangePasswordDialog";
+import { GenerationBell } from "@/components/app/GenerationBell";
 import { TopUpDialog } from "@/components/workspace/TopUpDialog";
 import { WorkspaceSwitcher } from "@/components/workspace/WorkspaceSwitcher";
 
@@ -62,6 +64,8 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
 
   const session = sessionQuery.data ?? null;
   const signedOut = sessionQuery.isError || sessionQuery.data === null;
+
+  useGenerationStream(session?.workspace.id ?? null);
 
   useEffect(() => {
     if (!signedOut) return;
@@ -304,6 +308,7 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
             </div>
 
             <div className="flex items-center gap-2">
+              <GenerationBell />
               <span className="hidden items-center gap-1.5 rounded-full border border-border bg-white/60 px-3 py-1.5 text-[11px] text-muted sm:inline-flex">
                 <span className="size-1.5 rounded-full bg-success" aria-hidden />
                 {formatWorkspaceRole(workspaceRole)}
