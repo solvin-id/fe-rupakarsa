@@ -20,12 +20,20 @@ import {
   useAdminMailSettingsQuery,
   useAdminModelsFilteredQuery,
   useAdminProvidersQuery,
+  useLimitsSettingsQuery,
   useTestMailMutation,
   useUpdateContactMutation,
+  useUpdateLimitsMutation,
   useUpdateMailSettingsMutation,
 } from "@rupakarsa/shared/hooks/use-admin";
 import { apiRequest } from "@rupakarsa/shared/lib/api/client";
-import type { AiModel, AdminContact, MailSettings, MediaCapability } from "@rupakarsa/shared/lib/types";
+import type {
+  AiModel,
+  AdminContact,
+  LimitsSettings,
+  MailSettings,
+  MediaCapability,
+} from "@rupakarsa/shared/lib/types";
 import { formatDateTime } from "@rupakarsa/shared/lib/format";
 import { normalizeWhatsAppNumber, whatsappLink } from "@rupakarsa/shared/lib/whatsapp";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
@@ -144,6 +152,10 @@ function SettingsForm({ contact }: { contact: AdminContact }) {
 
       <div className="mt-5">
         <AiSettingsSection />
+      </div>
+
+      <div className="mt-4">
+        <LimitsSettingsSection />
       </div>
 
       <div className="mt-4 flex items-start gap-2.5 rounded-2xl border border-accent/20 bg-accent-soft/50 px-4 py-3.5">
@@ -471,6 +483,165 @@ function AiSettingsForm({
         }
       >
         Simpan AI
+      </Button>
+    </section>
+  );
+}
+
+function LimitsSettingsSection() {
+  const limitsQuery = useLimitsSettingsQuery();
+
+  if (limitsQuery.isPending) {
+    return (
+      <section className="card p-5 sm:p-6">
+        <SectionLoading />
+      </section>
+    );
+  }
+  if (limitsQuery.isError || !limitsQuery.data) {
+    return (
+      <section className="card p-5 sm:p-6">
+        <p className="text-xs text-danger">
+          Gagal memuat batas prompt. Muat ulang halaman lalu coba lagi.
+        </p>
+      </section>
+    );
+  }
+
+  return <LimitsSettingsForm settings={limitsQuery.data} />;
+}
+
+function LimitsSettingsForm({ settings }: { settings: LimitsSettings }) {
+  const updateLimits = useUpdateLimitsMutation();
+  const pushToast = useUiStore((state) => state.pushToast);
+
+  const [generationsPerDay, setGenerationsPerDay] = useState(
+    String(settings.generationsPerDayPerWorkspace),
+  );
+  const [planPerHour, setPlanPerHour] = useState(String(settings.planRequestsPerHourPerUser));
+  const [planPromptMaxChars, setPlanPromptMaxChars] = useState(String(settings.planPromptMaxChars));
+  const [finalPromptMaxChars, setFinalPromptMaxChars] = useState(
+    String(settings.finalPromptMaxChars),
+  );
+
+  function handleSave(): void {
+    const values: LimitsSettings = {
+      generationsPerDayPerWorkspace: Number(generationsPerDay),
+      planRequestsPerHourPerUser: Number(planPerHour),
+      planPromptMaxChars: Number(planPromptMaxChars),
+      finalPromptMaxChars: Number(finalPromptMaxChars),
+    };
+
+    const invalid = (value: number, min: number, max: number): boolean =>
+      !Number.isInteger(value) || value < min || value > max;
+
+    if (invalid(values.generationsPerDayPerWorkspace, 1, 1000)) {
+      pushToast("error", "Render per hari harus 1–1000.");
+      return;
+    }
+    if (invalid(values.planRequestsPerHourPerUser, 1, 10000)) {
+      pushToast("error", "Plan per jam harus 1–10000.");
+      return;
+    }
+    if (invalid(values.planPromptMaxChars, 200, 20000)) {
+      pushToast("error", "Batas brief harus 200–20000 karakter.");
+      return;
+    }
+    if (invalid(values.finalPromptMaxChars, 200, 32000)) {
+      pushToast("error", "Batas prompt final harus 200–32000 karakter.");
+      return;
+    }
+
+    updateLimits.mutate(values, {
+      onSuccess: () => pushToast("success", "Batas prompt disimpan."),
+      onError: (error) => pushToast("error", error.message),
+    });
+  }
+
+  return (
+    <section className="card p-5 sm:p-6">
+      <div className="flex items-center gap-2">
+        <span className="flex size-9 items-center justify-center rounded-xl bg-canvas-2 text-ink">
+          <Settings className="size-4" aria-hidden />
+        </span>
+        <div>
+          <p className="mono-label text-muted">Kuota &amp; panjang prompt</p>
+          <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-ink">Batas prompt</h2>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 sm:grid-cols-2">
+        <Field
+          label="Render per hari per workspace"
+          htmlFor="limits-generations"
+          hint="1–1000 render."
+        >
+          <TextInput
+            id="limits-generations"
+            type="number"
+            min={1}
+            max={1000}
+            value={generationsPerDay}
+            onChange={(event) => setGenerationsPerDay(event.target.value)}
+          />
+        </Field>
+        <Field
+          label="Plan per jam per user"
+          htmlFor="limits-plan-hour"
+          hint="1–10000 permintaan plan."
+        >
+          <TextInput
+            id="limits-plan-hour"
+            type="number"
+            min={1}
+            max={10000}
+            value={planPerHour}
+            onChange={(event) => setPlanPerHour(event.target.value)}
+          />
+        </Field>
+        <Field
+          label="Batas brief (karakter)"
+          htmlFor="limits-plan-chars"
+          hint="Batas isian brief di Plan Canvas. 200–20000."
+        >
+          <TextInput
+            id="limits-plan-chars"
+            type="number"
+            min={200}
+            max={20000}
+            value={planPromptMaxChars}
+            onChange={(event) => setPlanPromptMaxChars(event.target.value)}
+          />
+        </Field>
+        <Field
+          label="Batas prompt final (karakter)"
+          htmlFor="limits-final-chars"
+          hint="Dipakai model yang tidak punya batas sendiri. 200–32000."
+        >
+          <TextInput
+            id="limits-final-chars"
+            type="number"
+            min={200}
+            max={32000}
+            value={finalPromptMaxChars}
+            onChange={(event) => setFinalPromptMaxChars(event.target.value)}
+          />
+        </Field>
+      </div>
+
+      <p className="mt-3 text-[11px] leading-relaxed text-muted">
+        Prompt final yang melebihi batas akan dimampatkan otomatis oleh model plan; bila model plan
+        tidak tersedia, prompt dipotong pada batas kata terdekat.
+      </p>
+
+      <Button
+        variant="primary"
+        className="mt-4"
+        loading={updateLimits.isPending}
+        icon={<Save className="size-4" aria-hidden />}
+        onClick={handleSave}
+      >
+        Simpan batas prompt
       </Button>
     </section>
   );

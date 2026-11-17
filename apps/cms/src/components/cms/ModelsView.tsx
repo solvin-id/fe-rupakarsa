@@ -37,6 +37,15 @@ function parseStrings(value: string): string[] {
     .filter(Boolean);
 }
 
+/** Blank keeps the workspace default (null); an unusable value is reported as `undefined`. */
+function parsePromptLimit(value: string): number | null | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 32000) return undefined;
+  return parsed;
+}
+
 function toggleCapability(
   list: MediaCapability[],
   capability: MediaCapability,
@@ -139,6 +148,7 @@ export function ModelsView() {
   const [editing, setEditing] = useState<AiModel | null>(null);
   const [draftDisplayName, setDraftDisplayName] = useState("");
   const [draftCost, setDraftCost] = useState("");
+  const [draftMaxPrompt, setDraftMaxPrompt] = useState("");
   const [draftDurations, setDraftDurations] = useState("");
   const [draftResolutions, setDraftResolutions] = useState("");
   const [draftAspectRatios, setDraftAspectRatios] = useState("");
@@ -152,6 +162,7 @@ export function ModelsView() {
   const [draftCode, setDraftCode] = useState("");
   const [draftMediaType, setDraftMediaType] = useState<ModelMediaType>("VIDEO");
   const [draftNewCost, setDraftNewCost] = useState("0");
+  const [draftNewMaxPrompt, setDraftNewMaxPrompt] = useState("");
   const [draftNewDurations, setDraftNewDurations] = useState("");
   const [draftNewResolutions, setDraftNewResolutions] = useState("");
   const [draftNewAspectRatios, setDraftNewAspectRatios] = useState("");
@@ -178,6 +189,7 @@ export function ModelsView() {
     setEditing(model);
     setDraftDisplayName(model.displayName);
     setDraftCost(String(model.tokenCost));
+    setDraftMaxPrompt(model.maxPromptChars === null ? "" : String(model.maxPromptChars));
     setDraftDurations((model.allowedParams.durations ?? []).join(", "));
     setDraftResolutions(model.allowedParams.resolutions.join(", "));
     setDraftAspectRatios(model.allowedParams.aspectRatios.join(", "));
@@ -207,11 +219,17 @@ export function ModelsView() {
       pushToast("error", "Kapabilitas output wajib diisi.");
       return;
     }
+    const maxPromptChars = parsePromptLimit(draftMaxPrompt);
+    if (maxPromptChars === undefined) {
+      pushToast("error", "Batas karakter prompt harus 0–32000 atau dikosongkan.");
+      return;
+    }
     updateModelFull.mutate(
       {
         modelId: editing.id,
         displayName: draftDisplayName.trim(),
         tokenCost: Math.round(cost),
+        maxPromptChars,
         allowedParams: {
           durations: editing.mediaType === "VIDEO" ? parseNumbers(draftDurations) : undefined,
           resolutions,
@@ -237,6 +255,7 @@ export function ModelsView() {
       setDraftCode("");
       setDraftMediaType("VIDEO");
       setDraftNewCost("0");
+      setDraftNewMaxPrompt("");
       setDraftNewDurations("");
       setDraftNewResolutions("");
       setDraftNewAspectRatios("");
@@ -323,6 +342,11 @@ export function ModelsView() {
       pushToast("error", "Model video membutuhkan minimal satu durasi.");
       return;
     }
+    const maxPromptChars = parsePromptLimit(draftNewMaxPrompt);
+    if (maxPromptChars === undefined) {
+      pushToast("error", "Batas karakter prompt harus 0–32000 atau dikosongkan.");
+      return;
+    }
 
     createModel.mutate(
       {
@@ -334,6 +358,7 @@ export function ModelsView() {
         outputCapabilities: draftNewOutputCaps,
         allowedParams: { durations, resolutions, aspectRatios },
         tokenCost: Math.round(cost),
+        maxPromptChars,
         isActive: draftActive,
       },
       {
@@ -583,6 +608,21 @@ export function ModelsView() {
               onChange={(event) => setDraftCost(event.target.value)}
             />
           </Field>
+          <Field
+            label="Batas karakter prompt"
+            htmlFor="model-max-prompt"
+            hint="Kosongkan untuk memakai batas default. Prompt lebih panjang dimampatkan otomatis."
+          >
+            <TextInput
+              id="model-max-prompt"
+              type="number"
+              min={0}
+              max={32000}
+              value={draftMaxPrompt}
+              onChange={(event) => setDraftMaxPrompt(event.target.value)}
+              placeholder="Default"
+            />
+          </Field>
           {editing?.mediaType === "VIDEO" ? (
             <Field
               label="Durasi (detik)"
@@ -737,6 +777,22 @@ export function ModelsView() {
               />
             </Field>
           </div>
+
+          <Field
+            label="Batas karakter prompt"
+            htmlFor="model-new-max-prompt"
+            hint="Kosongkan untuk memakai batas default. Prompt lebih panjang dimampatkan otomatis."
+          >
+            <TextInput
+              id="model-new-max-prompt"
+              type="number"
+              min={0}
+              max={32000}
+              value={draftNewMaxPrompt}
+              onChange={(event) => setDraftNewMaxPrompt(event.target.value)}
+              placeholder="Default"
+            />
+          </Field>
 
           {draftMediaType === "VIDEO" ? (
             <Field
