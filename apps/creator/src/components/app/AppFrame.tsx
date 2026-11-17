@@ -91,6 +91,14 @@ export function AppFrame({ children }: { children: React.ReactNode }) {
       onSuccess: () => {
         router.replace("/login");
       },
+      onError: (error) => {
+        // 401 means the session is already gone elsewhere; finish the local sign-out.
+        if ((error as { status?: number }).status === 401) {
+          router.replace("/login");
+          return;
+        }
+        pushToast("error", error.message);
+      },
     });
   }
 

@@ -24,6 +24,7 @@ import { useLogoutMutation, useSessionQuery } from "@rupakarsa/shared/hooks/use-
 import { hasCmsAccess } from "@rupakarsa/shared/lib/auth";
 import { formatTokens } from "@rupakarsa/shared/lib/format";
 import { SurfaceSwitcher } from "@rupakarsa/shared/surface";
+import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 import { Button, ToastViewport } from "@rupakarsa/shared/ui";
 
 const CREATOR_URL = process.env.NEXT_PUBLIC_CREATOR_URL ?? "http://localhost:3000";
@@ -49,6 +50,7 @@ export function CmsFrame({ children }: { children: React.ReactNode }) {
   const sessionQuery = useSessionQuery();
   const workspacesQuery = useAdminWorkspacesQuery();
   const logout = useLogoutMutation();
+  const pushToast = useUiStore((state) => state.pushToast);
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -77,6 +79,14 @@ export function CmsFrame({ children }: { children: React.ReactNode }) {
     logout.mutate(undefined, {
       onSuccess: () => {
         router.replace("/login");
+      },
+      onError: (error) => {
+        // 401 means the session is already gone elsewhere; finish the local sign-out.
+        if ((error as { status?: number }).status === 401) {
+          router.replace("/login");
+          return;
+        }
+        pushToast("error", error.message);
       },
     });
   }
