@@ -18,6 +18,7 @@ import type {
   MailSettings,
   MediaCapability,
   MediaType,
+  ModelMediaType,
   ModelAllowedParams,
   ModelTemplate,
   Order,
@@ -115,7 +116,7 @@ export interface CreateModelInput {
   code: string;
   displayName: string;
   providerModelId?: string;
-  mediaType: MediaType;
+  mediaType: ModelMediaType;
   inputCapabilities?: MediaCapability[];
   outputCapabilities?: MediaCapability[];
   allowedParams: ModelAllowedParams;

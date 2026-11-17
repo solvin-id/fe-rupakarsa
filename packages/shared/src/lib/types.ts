@@ -2,6 +2,8 @@ export type Role = "USER" | "SUPERADMIN";
 export type WorkspaceRole = "OWNER" | "ADMIN" | "MEMBER";
 export type JoinRequestStatus = "PENDING" | "APPROVED" | "REJECTED";
 export type MediaType = "VIDEO" | "IMAGE";
+/** Catalog models also cover plan/analysis models, which carry no render output. */
+export type ModelMediaType = "VIDEO" | "IMAGE" | "TEXT";
 export type MediaCapability = "TEXT" | "IMAGE" | "VIDEO";
 export type GenerationStatus = "QUEUED" | "RENDERING" | "COMPLETED" | "FAILED";
 export type ProviderCode = string;
@@ -204,7 +206,7 @@ export interface AiModel {
   code: string;
   displayName: string;
   providerModelId: string;
-  mediaType: MediaType;
+  mediaType: ModelMediaType;
   inputCapabilities: MediaCapability[];
   outputCapabilities: MediaCapability[];
   source: string;
@@ -219,7 +221,7 @@ export interface RemoteModel {
   displayName: string;
   inputCapabilities: MediaCapability[];
   outputCapabilities: MediaCapability[];
-  mediaType: MediaType;
+  mediaType: ModelMediaType;
 }
 
 export interface SyncResult {
@@ -239,7 +241,7 @@ export interface ModelTemplate {
   providerCode: string;
   code: string;
   displayName: string;
-  mediaType: MediaType;
+  mediaType: ModelMediaType;
   allowedParams: ModelAllowedParams;
   tokenCost: number;
 }

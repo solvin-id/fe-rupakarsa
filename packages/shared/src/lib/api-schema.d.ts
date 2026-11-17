@@ -3554,7 +3554,7 @@ export interface paths {
                         displayName: string;
                         providerModelId?: string;
                         /** @enum {string} */
-                        mediaType: "VIDEO" | "IMAGE";
+                        mediaType: "VIDEO" | "IMAGE" | "TEXT";
                         inputCapabilities?: ("TEXT" | "IMAGE" | "VIDEO")[];
                         outputCapabilities?: ("TEXT" | "IMAGE" | "VIDEO")[];
                         allowedParams: {
@@ -4503,7 +4503,7 @@ export interface components {
             displayName: string;
             providerModelId: string;
             /** @enum {string} */
-            mediaType: "VIDEO" | "IMAGE";
+            mediaType: "VIDEO" | "IMAGE" | "TEXT";
             inputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
             outputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
             source: string;
@@ -4656,7 +4656,7 @@ export interface components {
             inputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
             outputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
             /** @enum {string} */
-            mediaType: "VIDEO" | "IMAGE";
+            mediaType: "VIDEO" | "IMAGE" | "TEXT";
             durations: number[];
             resolutions: string[];
         };
@@ -4671,7 +4671,7 @@ export interface components {
             code: string;
             displayName: string;
             /** @enum {string} */
-            mediaType: "VIDEO" | "IMAGE";
+            mediaType: "VIDEO" | "IMAGE" | "TEXT";
             allowedParams: {
                 durations?: number[];
                 resolutions: string[];

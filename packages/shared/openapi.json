@@ -869,7 +869,8 @@
             "type": "string",
             "enum": [
               "VIDEO",
-              "IMAGE"
+              "IMAGE",
+              "TEXT"
             ]
           },
           "inputCapabilities": {
@@ -1537,7 +1538,8 @@
             "type": "string",
             "enum": [
               "VIDEO",
-              "IMAGE"
+              "IMAGE",
+              "TEXT"
             ]
           },
           "durations": {
@@ -1605,7 +1607,8 @@
             "type": "string",
             "enum": [
               "VIDEO",
-              "IMAGE"
+              "IMAGE",
+              "TEXT"
             ]
           },
           "allowedParams": {
@@ -5613,7 +5616,8 @@
                     "type": "string",
                     "enum": [
                       "VIDEO",
-                      "IMAGE"
+                      "IMAGE",
+                      "TEXT"
                     ]
                   },
                   "inputCapabilities": {

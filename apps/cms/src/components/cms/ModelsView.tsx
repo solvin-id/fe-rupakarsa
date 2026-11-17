@@ -14,7 +14,7 @@ import { formatTokens } from "@rupakarsa/shared/lib/format";
 import type {
   AiModel,
   MediaCapability,
-  MediaType,
+  ModelMediaType,
   ModelTemplate,
 } from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
@@ -150,7 +150,7 @@ export function ModelsView() {
   const [draftTemplateCode, setDraftTemplateCode] = useState(CUSTOM_TEMPLATE);
   const [draftName, setDraftName] = useState("");
   const [draftCode, setDraftCode] = useState("");
-  const [draftMediaType, setDraftMediaType] = useState<MediaType>("VIDEO");
+  const [draftMediaType, setDraftMediaType] = useState<ModelMediaType>("VIDEO");
   const [draftNewCost, setDraftNewCost] = useState("0");
   const [draftNewDurations, setDraftNewDurations] = useState("");
   const [draftNewResolutions, setDraftNewResolutions] = useState("");
@@ -196,9 +196,10 @@ export function ModelsView() {
       pushToast("error", "Tarif token harus angka 0 atau lebih.");
       return;
     }
-    const resolutions = parseStrings(draftResolutions);
-    const aspectRatios = parseStrings(draftAspectRatios);
-    if (resolutions.length === 0 || aspectRatios.length === 0) {
+    const isText = editing.mediaType === "TEXT";
+    const resolutions = isText ? [] : parseStrings(draftResolutions);
+    const aspectRatios = isText ? [] : parseStrings(draftAspectRatios);
+    if (!isText && (resolutions.length === 0 || aspectRatios.length === 0)) {
       pushToast("error", "Resolusi dan rasio aspek tidak boleh kosong.");
       return;
     }
@@ -282,7 +283,7 @@ export function ModelsView() {
     applyTemplate(templates.find((template) => template.code === code) ?? null);
   }
 
-  function handleMediaTypeChange(value: MediaType): void {
+  function handleMediaTypeChange(value: ModelMediaType): void {
     setDraftMediaType(value);
     setDraftNewOutputCaps([value]);
   }
@@ -305,9 +306,11 @@ export function ModelsView() {
       pushToast("error", "Tarif token harus angka 0 atau lebih.");
       return;
     }
-    const resolutions = parseStrings(draftNewResolutions);
-    const aspectRatios = parseStrings(draftNewAspectRatios);
-    if (resolutions.length === 0 || aspectRatios.length === 0) {
+    // Plan/analysis models render nothing, so they carry no resolution or aspect ratio.
+    const isText = draftMediaType === "TEXT";
+    const resolutions = isText ? [] : parseStrings(draftNewResolutions);
+    const aspectRatios = isText ? [] : parseStrings(draftNewAspectRatios);
+    if (!isText && (resolutions.length === 0 || aspectRatios.length === 0)) {
       pushToast("error", "Resolusi dan rasio aspek tidak boleh kosong.");
       return;
     }
@@ -593,28 +596,32 @@ export function ModelsView() {
               />
             </Field>
           ) : null}
-          <Field
-            label="Resolusi"
-            htmlFor="model-resolutions"
-            hint="Pisahkan dengan koma, contoh: 720p, 1080p."
-          >
-            <TextInput
-              id="model-resolutions"
-              value={draftResolutions}
-              onChange={(event) => setDraftResolutions(event.target.value)}
-            />
-          </Field>
-          <Field
-            label="Rasio aspek"
-            htmlFor="model-aspects"
-            hint="Pisahkan dengan koma, contoh: 16:9, 9:16, 1:1."
-          >
-            <TextInput
-              id="model-aspects"
-              value={draftAspectRatios}
-              onChange={(event) => setDraftAspectRatios(event.target.value)}
-            />
-          </Field>
+          {editing?.mediaType === "TEXT" ? null : (
+            <>
+              <Field
+                label="Resolusi"
+                htmlFor="model-resolutions"
+                hint="Pisahkan dengan koma, contoh: 720p, 1080p."
+              >
+                <TextInput
+                  id="model-resolutions"
+                  value={draftResolutions}
+                  onChange={(event) => setDraftResolutions(event.target.value)}
+                />
+              </Field>
+              <Field
+                label="Rasio aspek"
+                htmlFor="model-aspects"
+                hint="Pisahkan dengan koma, contoh: 16:9, 9:16, 1:1."
+              >
+                <TextInput
+                  id="model-aspects"
+                  value={draftAspectRatios}
+                  onChange={(event) => setDraftAspectRatios(event.target.value)}
+                />
+              </Field>
+            </>
+          )}
           <CapabilityPicker
             label="Kapabilitas input"
             value={draftInputCaps}
@@ -712,10 +719,11 @@ export function ModelsView() {
               <Select
                 id="model-media"
                 value={draftMediaType}
-                onChange={(value) => handleMediaTypeChange(value as MediaType)}
+                onChange={(value) => handleMediaTypeChange(value as ModelMediaType)}
                 options={[
                   { value: "VIDEO", label: "VIDEO" },
                   { value: "IMAGE", label: "IMAGE" },
+                  { value: "TEXT", label: "Teks (plan/analisis)" },
                 ]}
               />
             </Field>
@@ -744,29 +752,33 @@ export function ModelsView() {
             </Field>
           ) : null}
 
-          <Field
-            label="Resolusi"
-            htmlFor="model-new-resolutions"
-            hint="Pisahkan dengan koma, contoh: 720p, 1080p."
-          >
-            <TextInput
-              id="model-new-resolutions"
-              value={draftNewResolutions}
-              onChange={(event) => setDraftNewResolutions(event.target.value)}
-            />
-          </Field>
+          {draftMediaType === "TEXT" ? null : (
+            <>
+              <Field
+                label="Resolusi"
+                htmlFor="model-new-resolutions"
+                hint="Pisahkan dengan koma, contoh: 720p, 1080p."
+              >
+                <TextInput
+                  id="model-new-resolutions"
+                  value={draftNewResolutions}
+                  onChange={(event) => setDraftNewResolutions(event.target.value)}
+                />
+              </Field>
 
-          <Field
-            label="Rasio aspek"
-            htmlFor="model-new-aspects"
-            hint="Pisahkan dengan koma, contoh: 16:9, 9:16, 1:1."
-          >
-            <TextInput
-              id="model-new-aspects"
-              value={draftNewAspectRatios}
-              onChange={(event) => setDraftNewAspectRatios(event.target.value)}
-            />
-          </Field>
+              <Field
+                label="Rasio aspek"
+                htmlFor="model-new-aspects"
+                hint="Pisahkan dengan koma, contoh: 16:9, 9:16, 1:1."
+              >
+                <TextInput
+                  id="model-new-aspects"
+                  value={draftNewAspectRatios}
+                  onChange={(event) => setDraftNewAspectRatios(event.target.value)}
+                />
+              </Field>
+            </>
+          )}
 
           <CapabilityPicker
             label="Kapabilitas input"
