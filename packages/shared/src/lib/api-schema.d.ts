@@ -4657,6 +4657,8 @@ export interface components {
             outputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
             /** @enum {string} */
             mediaType: "VIDEO" | "IMAGE";
+            durations: number[];
+            resolutions: string[];
         };
         SyncResult: {
             added: number;

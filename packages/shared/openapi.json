@@ -1539,6 +1539,18 @@
               "VIDEO",
               "IMAGE"
             ]
+          },
+          "durations": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "resolutions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -1546,7 +1558,9 @@
           "displayName",
           "inputCapabilities",
           "outputCapabilities",
-          "mediaType"
+          "mediaType",
+          "durations",
+          "resolutions"
         ]
       },
       "SyncResult": {
