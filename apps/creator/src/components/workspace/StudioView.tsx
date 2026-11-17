@@ -2,6 +2,7 @@
 
 import { ArrowLeft, Film, Image as ImageIcon, Layers, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -20,7 +21,6 @@ import {
 } from "@rupakarsa/shared/hooks/use-projects";
 import { queryKeys } from "@rupakarsa/shared/lib/api/keys";
 import { formatDateTime, formatRelative, formatTokens } from "@rupakarsa/shared/lib/format";
-import { isVideoUrl } from "@rupakarsa/shared/lib/media";
 import { pickModel } from "@rupakarsa/shared/lib/models";
 import type { Generation, GenerationStatus, MediaCapability, MediaType } from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
@@ -28,9 +28,11 @@ import { Button } from "@rupakarsa/shared/ui";
 import { Dialog } from "@rupakarsa/shared/ui";
 
 import { GeneratorPanel } from "@/components/workspace/GeneratorPanel";
+import { GenerationMediaPreview } from "@/components/workspace/GenerationMediaPreview";
 import { HistoryPanel } from "@/components/workspace/HistoryPanel";
 import { PlanCanvas } from "@/components/workspace/PlanCanvas";
 import { PreContextPanel } from "@/components/workspace/PreContextPanel";
+import { useMorphToBell } from "@/components/workspace/useMorphToBell";
 import type { ReferenceFile } from "@/components/workspace/AssetDropzone";
 
 const STATUS_LABEL: Record<GenerationStatus, string> = {
@@ -61,6 +63,9 @@ export function StudioView({ folderId }: { folderId: string }) {
   const deleteGeneration = useDeleteGenerationMutation();
   const pushToast = useUiStore((state) => state.pushToast);
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const deepLinkGenerationId = searchParams.get("generation");
 
   const [mediaType, setMediaType] = useState<MediaType>("VIDEO");
   const [modelId, setModelId] = useState("");
@@ -77,7 +82,7 @@ export function StudioView({ folderId }: { folderId: string }) {
   const [analysisText, setAnalysisText] = useState("");
   const [simulateFailure, setSimulateFailure] = useState(false);
   const [activeGenerationId, setActiveGenerationId] = useState<string | null>(null);
-  const [detailTarget, setDetailTarget] = useState<Generation | null>(null);
+  const [detail, setDetail] = useState<Generation | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Generation | null>(null);
 
   const handledStatusRef = useRef<string | null>(null);
@@ -146,6 +151,29 @@ export function StudioView({ folderId }: { folderId: string }) {
     );
   }, [activeGeneration, activeGenerationId, folderId, pushToast, queryClient]);
 
+  /**
+   * The bell links to `/app/projects/<folder>?generation=<id>`. The query is the source of truth
+   * while it is present, so the dialog opens without a state write inside an effect; closing it
+   * rewrites the URL.
+   */
+  const detailTarget =
+    detail ??
+    (deepLinkGenerationId
+      ? (folderGenerations.find((row) => row.id === deepLinkGenerationId) ?? null)
+      : null);
+
+  /** Closing always drops the query too, so the dialog cannot reopen from the URL. */
+  function closeDetail(): void {
+    setDetail(null);
+    if (deepLinkGenerationId) router.replace(`/app/projects/${folderId}`);
+  }
+
+  useMorphToBell(
+    activeGeneration && generating
+      ? { id: activeGeneration.id, label: activeGeneration.modelName }
+      : null,
+  );
+
   const planCost = useMemo(() => {
     const freePlanRemaining = session?.workspace.freePlanRemaining ?? 0;
     if (freePlanRemaining > 0) return { tokens: 0, usesFreeQuota: true };
@@ -155,6 +183,10 @@ export function StudioView({ folderId }: { folderId: string }) {
   const balance = session?.workspace.tokenBalance ?? 0;
   const hasPrompt = planMode ? plannedPrompt.trim().length > 0 : rawPrompt.trim().length > 0;
   const canGenerate = Boolean(hasPrompt && model && !generating && balance >= (model?.tokenCost ?? 0));
+
+  const promptLimitChars = config?.limits.planPromptMaxChars ?? 2000;
+  const renderPromptLimit = model?.maxPromptChars ?? config?.limits.finalPromptMaxChars ?? 4000;
+  const compressing = generateMutation.isPending || planMutation.isPending;
 
   const videos = folderGenerations.filter((item) => item.mediaType === "VIDEO").length;
   const images = folderGenerations.filter((item) => item.mediaType === "IMAGE").length;
@@ -317,7 +349,7 @@ export function StudioView({ folderId }: { folderId: string }) {
     setNegativePrompt("");
     setAnalysisText(generation.analysisSnapshot);
     setPlanReady(true);
-    setDetailTarget(null);
+    closeDetail();
     document.getElementById("plan-canvas")?.scrollIntoView({ behavior: "smooth", block: "start" });
     pushToast("info", "Plan dimuat ulang ke canvas.");
   }
@@ -342,7 +374,7 @@ export function StudioView({ folderId }: { folderId: string }) {
       {
         onSuccess: () => {
           setDeleteTarget(null);
-          setDetailTarget(null);
+          closeDetail();
           pushToast("success", "Riwayat render dihapus.");
         },
         onError: (error) => pushToast("error", error.message),
@@ -475,12 +507,15 @@ export function StudioView({ folderId }: { folderId: string }) {
             analysisText={analysisText}
             planModelCapabilities={planModelCapabilities}
             planModelName={config?.planModel?.name ?? null}
+            promptLimitChars={promptLimitChars}
+            renderPromptLimit={renderPromptLimit}
+            compressing={compressing}
           />
 
           <HistoryPanel
             generations={folderGenerations}
             activeJobId={activeGenerationId}
-            onOpen={setDetailTarget}
+            onOpen={setDetail}
             onDownload={handleDownload}
             onRemix={handleRemix}
             onDelete={setDeleteTarget}
@@ -496,12 +531,12 @@ export function StudioView({ folderId }: { folderId: string }) {
             ? `${detailTarget.modelName} · ${STATUS_LABEL[detailTarget.status]} · ${formatRelative(detailTarget.createdAt)}`
             : undefined
         }
-        onClose={() => setDetailTarget(null)}
+        onClose={closeDetail}
         widthClassName="max-w-3xl"
         footer={
           detailTarget ? (
             <>
-              <Button variant="ghost" onClick={() => setDetailTarget(null)}>
+              <Button variant="ghost" onClick={closeDetail}>
                 Tutup
               </Button>
               <Button
@@ -529,20 +564,14 @@ export function StudioView({ folderId }: { folderId: string }) {
                 Hasil dibersihkan setelah masa retensi penyimpanan.
               </div>
             ) : detailTarget.status === "COMPLETED" && detailTarget.outputUrl ? (
-              isVideoUrl(detailTarget.outputUrl) ? (
-                <video
-                  controls
-                  src={detailTarget.outputUrl}
-                  className="aspect-video w-full rounded-2xl bg-ink"
-                />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={detailTarget.outputUrl}
-                  alt={detailTarget.modelName}
-                  className="aspect-video w-full rounded-2xl border border-border object-cover"
-                />
-              )
+              <GenerationMediaPreview
+                url={detailTarget.outputUrl}
+                mediaType={detailTarget.mediaType}
+                mime={detailTarget.outputMime}
+                label={detailTarget.modelName}
+                controls
+                className="aspect-video w-full rounded-2xl bg-ink object-cover"
+              />
             ) : detailTarget.status === "COMPLETED" ? (
               <GradientArt variant="sunset" className="aspect-video w-full" rounded="rounded-2xl">
                 <div className="relative z-10 flex h-full items-center justify-center">
@@ -562,6 +591,12 @@ export function StudioView({ folderId }: { folderId: string }) {
                   : "Render masih berjalan. Hasil akan muncul di sini."}
               </div>
             )}
+
+            {detailTarget.promptCompressed ? (
+              <p className="rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] leading-relaxed text-ink">
+                Prompt dimampatkan ke {formatTokens(detailTarget.promptLimitChars ?? 0)} karakter.
+              </p>
+            ) : null}
 
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {[

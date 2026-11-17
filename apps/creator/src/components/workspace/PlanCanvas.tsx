@@ -46,6 +46,12 @@ export interface PlanCanvasProps {
   analysisText: string;
   planModelCapabilities: MediaCapability[];
   planModelName: string | null;
+  /** Brief ceiling from CMS limits. */
+  promptLimitChars: number;
+  /** Final-prompt ceiling of the selected model, so the plan can warn before generate. */
+  renderPromptLimit: number;
+  /** A generate request is compressing the prompt right now. */
+  compressing: boolean;
 }
 
 const STATUS_LABEL: Record<GenerationStatus, string> = {
@@ -85,6 +91,9 @@ export function PlanCanvas({
   analysisText,
   planModelCapabilities,
   planModelName,
+  promptLimitChars,
+  renderPromptLimit,
+  compressing,
 }: PlanCanvasProps) {
   const cost = model?.tokenCost ?? 0;
   const projected = Math.max(0, balance - cost);
@@ -154,12 +163,14 @@ export function PlanCanvas({
             <label htmlFor="raw-prompt" className="mono-label text-muted">
               Brief mentah
             </label>
-            <span className="text-[10px] text-muted">{rawPrompt.length}/2000</span>
+            <span className="text-[10px] text-muted">
+              {rawPrompt.length}/{promptLimitChars}
+            </span>
           </div>
           <TextArea
             id="raw-prompt"
             rows={4}
-            maxLength={2000}
+            maxLength={promptLimitChars}
             value={rawPrompt}
             onChange={(event) => onRawPromptChange(event.target.value)}
             placeholder="Contoh: Mbok Srini berjalan di lorong penjara batu, membawa lentera, bayangan jeruji jatuh di wajahnya. Suasana dingin, tegang, tapi ada kelembutan."
@@ -214,6 +225,12 @@ export function PlanCanvas({
                 Bisa diedit
               </span>
             </div>
+            {plannedPrompt.length > renderPromptLimit ? (
+              <div className="mt-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] leading-relaxed text-ink">
+                Plan {plannedPrompt.length} karakter, batas model {renderPromptLimit}; prompt akan
+                dimampatkan otomatis saat generate.
+              </div>
+            ) : null}
             <TextArea
               aria-label="Plan blueprint"
               rows={8}
@@ -248,7 +265,7 @@ export function PlanCanvas({
               </p>
             ) : (
               <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-                Tanpa lampiran. Model plan tetap menyusun prompt final dari brief dan pre-context proyek.
+                Tanpa lampiran. Server menyusun prompt final dari brief dan pre-context proyek.
               </p>
             )}
             <Button
@@ -265,7 +282,12 @@ export function PlanCanvas({
           </div>
         ) : null}
 
-        <div className="mt-5 rounded-2xl bg-ink p-4 text-canvas sm:p-5">
+        <div
+          className="mt-5 rounded-2xl bg-ink p-4 text-canvas sm:p-5"
+          data-generation-panel
+          data-generation-active={generating ? "true" : undefined}
+          data-generation-label={model?.displayName ?? ""}
+        >
           <div className="flex items-center justify-between">
             <p className="mono-label text-[9px] text-canvas/50">Implement Mode</p>
             <CircleDollarSign className="size-4 text-accent-3" aria-hidden />
@@ -278,6 +300,9 @@ export function PlanCanvas({
               </p>
               <p className="text-[10px] text-canvas/50">
                 token · {formatRupiahFromTokens(cost, tokenValueRupiah)}
+              </p>
+              <p className="mt-1 text-[10px] text-canvas/50">
+                Batas prompt model: {formatTokens(renderPromptLimit)} karakter
               </p>
             </div>
             <div className="text-right text-[11px] text-canvas/60">
@@ -311,7 +336,11 @@ export function PlanCanvas({
             <div className="mt-4 rounded-xl border border-accent/25 bg-accent/10 px-3 py-2.5">
               <div className="flex items-center gap-2 text-xs text-accent">
                 <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                {activeStatus ? STATUS_LABEL[activeStatus] : "Mengirim job…"}
+                {compressing
+                  ? "Memampatkan prompt…"
+                  : activeStatus
+                    ? STATUS_LABEL[activeStatus]
+                    : "Mengirim job…"}
               </div>
               <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
                 <div className="h-full w-2/3 animate-pulse rounded-full bg-accent" />
@@ -329,12 +358,12 @@ export function PlanCanvas({
               icon={<ArrowRight className="size-4" aria-hidden />}
               onClick={onGenerate}
             >
-              Generate konten
+              {compressing ? "Memampatkan prompt…" : "Generate konten"}
             </Button>
           ) : (
             <p className="mt-4 flex items-center gap-1.5 text-[10px] text-canvas/50">
               <FileText className="size-3" aria-hidden />
-              Plan mode mati: reprompt langsung dipakai server.
+              Plan mode mati: brief dan catatan lampiran langsung dipakai server.
             </p>
           )}
 

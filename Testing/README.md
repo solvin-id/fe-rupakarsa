@@ -24,10 +24,12 @@ npm test
 - `api-client.test.ts` — `apiRequest`: cookie `include`, header JSON pada POST, 204 → `undefined`,
   `{ error: { message } }` → `ApiError`, kegagalan jaringan → status 0.
 - `tokens.test.ts` — tarif token model, kapasitas render, dan format Rupiah berbasis rate.
-- `media.test.ts` — `isVideoUrl` untuk hasil render video vs gambar.
+- `media.test.ts` — `isVideoMedia`: mime tersimpan yang menentukan, ekstensi sebagai cadangan.
+- `generation-media.test.tsx` — preview memilih `<video preload="metadata">` untuk render video dan
+  `<img loading="lazy">` untuk gambar, jadi Chrome tidak lagi menampilkan ikon rusak.
+- `generation-store.test.ts` — snapshot job aktif, alert saat render selesai, dan tandai dibaca.
 - `whatsapp.test.ts` — normalisasi nomor WhatsApp admin dan pembentukan link `wa.me`.
-- `generation-card.test.tsx` — kartu riwayat merender poster asli saat `outputUrl` ada, dan
-  fallback gradient saat belum ada hasil.
+- `generation-card.test.tsx` — kartu riwayat merender video/gambar hasil render dan fallback gradient.
 
 ## Aturan
 

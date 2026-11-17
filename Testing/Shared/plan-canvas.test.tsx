@@ -19,6 +19,7 @@ function model(overrides: Partial<AiModel>): AiModel {
     source: "SYNC",
     allowedParams: { durations: [10], resolutions: ["1080p"], aspectRatios: ["16:9"] },
     tokenCost: 35,
+    maxPromptChars: null,
     isActive: true,
     isDefault: false,
     ...overrides,
@@ -55,6 +56,9 @@ const baseProps = {
   analysisText: "ANALYSED SUBJECT",
   planModelCapabilities: ["TEXT", "IMAGE", "VIDEO"] as Array<"TEXT" | "IMAGE" | "VIDEO">,
   planModelName: "Vision",
+  promptLimitChars: 2000,
+  renderPromptLimit: 4000,
+  compressing: false,
 };
 
 describe("PlanCanvas plan mode", () => {

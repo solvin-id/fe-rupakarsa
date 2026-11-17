@@ -15,6 +15,8 @@ import { GradientArt } from "@rupakarsa/shared/brand";
 import { formatRelative, formatTokens } from "@rupakarsa/shared/lib/format";
 import type { Generation } from "@rupakarsa/shared/lib/types";
 
+import { GenerationMediaPreview } from "@/components/workspace/GenerationMediaPreview";
+
 const STATUS_STYLES: Record<Generation["status"], string> = {
   QUEUED: "bg-warning/10 text-warning",
   RENDERING: "bg-accent/10 text-accent-strong",
@@ -67,10 +69,11 @@ export function GenerationCard({
             Aset dibersihkan
           </div>
         ) : completed && outputUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={outputUrl}
-            alt={generation.modelName}
+          <GenerationMediaPreview
+            url={outputUrl}
+            mediaType={generation.mediaType}
+            mime={generation.outputMime}
+            label={generation.modelName}
             className="aspect-[4/3] w-full rounded-xl object-cover"
           />
         ) : completed ? (

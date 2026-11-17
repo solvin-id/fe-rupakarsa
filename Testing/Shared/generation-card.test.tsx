@@ -29,6 +29,10 @@ const baseGeneration: Generation = {
   outputPurgedAt: null,
   errorMessage: null,
   refunded: false,
+  startedAt: "2026-11-16T05:30:00.500Z",
+  providerStatus: "rendering",
+  promptCompressed: false,
+  promptLimitChars: null,
   createdAt: "2026-11-16T05:30:00.000Z",
   completedAt: "2026-11-16T05:30:02.000Z",
 };
@@ -48,8 +52,18 @@ function renderCard(overrides: Partial<Generation>) {
 }
 
 describe("GenerationCard", () => {
-  it("renders the rendered poster when the output URL exists", () => {
-    renderCard({});
+  it("renders a poster video for a completed video render instead of a broken img", () => {
+    const { container } = renderCard({ outputUrl: "https://api.test/media/generations/a.mp4" });
+    const video = container.querySelector("video");
+    expect(video).not.toBeNull();
+    expect(video).toHaveAttribute("src", "https://api.test/media/generations/a.mp4#t=0.1");
+    expect(video).toHaveAttribute("preload", "metadata");
+    expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("keeps an image output on img", () => {
+    const { container } = renderCard({ mediaType: "IMAGE", outputMime: "image/png" });
+    expect(container.querySelector("video")).toBeNull();
     expect(screen.getByAltText("Wan Qwen 10s")).toHaveAttribute(
       "src",
       "https://api.test/media/generations/a.svg",
@@ -59,11 +73,12 @@ describe("GenerationCard", () => {
   it("falls back to gradient art when there is no output URL", () => {
     renderCard({ outputUrl: null });
     expect(screen.queryByAltText("Wan Qwen 10s")).toBeNull();
+    expect(screen.queryByLabelText("Wan Qwen 10s")).toBeNull();
   });
 
   it("hides the poster and disables download after retention purged the asset", () => {
     renderCard({ outputPurgedAt: "2026-11-26T00:00:00.000Z" });
-    expect(screen.queryByAltText("Wan Qwen 10s")).toBeNull();
+    expect(screen.queryByLabelText("Wan Qwen 10s")).toBeNull();
     expect(screen.getByText("Aset dibersihkan")).toBeInTheDocument();
     expect(screen.getByLabelText("Unduh hasil")).toBeDisabled();
   });
