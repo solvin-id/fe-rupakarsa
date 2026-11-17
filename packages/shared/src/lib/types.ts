@@ -174,8 +174,28 @@ export interface Generation {
   outputPurgedAt: string | null;
   errorMessage: string | null;
   refunded: boolean;
+  startedAt: string | null;
+  providerStatus: string | null;
+  promptCompressed: boolean;
+  promptLimitChars: number | null;
   createdAt: string;
   completedAt: string | null;
+}
+
+/** In-flight render as the notification bell sees it. */
+export interface ActiveGeneration {
+  id: string;
+  folderId: string;
+  folderName: string;
+  modelName: string;
+  mediaType: MediaType;
+  status: GenerationStatus;
+  startedAt: string | null;
+  providerStatus: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  tokensCharged: number;
+  errorMessage: string | null;
 }
 
 export interface AiProvider {
@@ -212,6 +232,7 @@ export interface AiModel {
   source: string;
   allowedParams: ModelAllowedParams;
   tokenCost: number;
+  maxPromptChars: number | null;
   isActive: boolean;
   isDefault: boolean;
 }
@@ -271,6 +292,15 @@ export interface PublicConfig {
   features: { simulation: boolean };
   planModel: PlanModelConfig | null;
   defaults: { videoModelId: string | null };
+  limits: { planPromptMaxChars: number; finalPromptMaxChars: number };
+}
+
+/** Quota and prompt ceilings editable from the CMS. */
+export interface LimitsSettings {
+  generationsPerDayPerWorkspace: number;
+  planRequestsPerHourPerUser: number;
+  planPromptMaxChars: number;
+  finalPromptMaxChars: number;
 }
 
 export interface PlanResponse {
@@ -278,6 +308,7 @@ export interface PlanResponse {
   cost: { tokens: number; usesFreeQuota: boolean };
   workspace: Workspace;
   analysis: { attachments: { key: string; text: string }[]; preContext: string };
+  limit: { promptChars: number };
 }
 
 export interface CreatedGeneration {

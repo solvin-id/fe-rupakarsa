@@ -1,6 +1,7 @@
 import type {} from "../api-contract";
 import { apiRequest, apiUpload } from "./client";
 import type {
+  ActiveGeneration,
   AdminContact,
   AdminWorkspacesPayload,
   AiModel,
@@ -14,6 +15,7 @@ import type {
   FolderWithStats,
   Generation,
   GenerationParams,
+  LimitsSettings,
   LoginResponse,
   MailSettings,
   MediaCapability,
@@ -121,6 +123,7 @@ export interface CreateModelInput {
   outputCapabilities?: MediaCapability[];
   allowedParams: ModelAllowedParams;
   tokenCost: number;
+  maxPromptChars?: number | null;
   isActive: boolean;
 }
 
@@ -130,6 +133,7 @@ export interface UpdateModelInput {
   inputCapabilities?: MediaCapability[];
   outputCapabilities?: MediaCapability[];
   tokenCost?: number;
+  maxPromptChars?: number | null;
   allowedParams?: ModelAllowedParams;
   isActive?: boolean;
 }
@@ -278,6 +282,8 @@ export const creatorApi = {
     apiRequest<CreatedGeneration>("/api/creator/generations", { method: "POST", body: input }),
   generation: (generationId: string) =>
     apiRequest<Generation>(`/api/creator/generations/${generationId}`),
+  activeGenerations: () =>
+    apiRequest<ActiveGeneration[]>("/api/creator/generations?active=true"),
   deleteGeneration: (generationId: string) =>
     apiRequest<void>(`/api/creator/generations/${generationId}`, { method: "DELETE" }),
   uploadReference: (file: File) => apiUpload<UploadedAsset>("/api/creator/uploads", file),
@@ -357,6 +363,10 @@ export const cmsApi = {
   contact: () => apiRequest<AdminContact>("/api/cms/settings/contact"),
   updateContact: (input: AdminContact) =>
     apiRequest<AdminContact>("/api/cms/settings/contact", { method: "PUT", body: input }),
+
+  limits: () => apiRequest<LimitsSettings>("/api/cms/settings/limits"),
+  updateLimits: (input: LimitsSettings) =>
+    apiRequest<LimitsSettings>("/api/cms/settings/limits", { method: "PUT", body: input }),
 
   storageSettings: () => apiRequest<StorageSettings>("/api/cms/settings/storage"),
   updateStorageSettings: (input: {

@@ -12,7 +12,7 @@ import type {
   UpdateProviderInput,
 } from "../lib/api/endpoints";
 import { queryKeys } from "../lib/api/keys";
-import type { AdminContact, Workspace } from "../lib/types";
+import type { AdminContact, LimitsSettings, Workspace } from "../lib/types";
 
 export function useAdminAccountsQuery() {
   return useQuery({ queryKey: queryKeys.admin.accounts, queryFn: cmsApi.accounts });
@@ -285,6 +285,21 @@ export function useTestStorageMutation() {
 
 export function useAdminMailSettingsQuery() {
   return useQuery({ queryKey: queryKeys.admin.mail, queryFn: cmsApi.mailSettings });
+}
+
+export function useLimitsSettingsQuery() {
+  return useQuery({ queryKey: queryKeys.admin.limits, queryFn: cmsApi.limits });
+}
+
+export function useUpdateLimitsMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: LimitsSettings) => cmsApi.updateLimits(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.limits });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.config });
+    },
+  });
 }
 
 export function useUpdateMailSettingsMutation() {

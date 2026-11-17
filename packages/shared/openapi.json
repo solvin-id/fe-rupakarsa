@@ -140,6 +140,21 @@
             "required": [
               "videoModelId"
             ]
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "planPromptMaxChars": {
+                "type": "integer"
+              },
+              "finalPromptMaxChars": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "planPromptMaxChars",
+              "finalPromptMaxChars"
+            ]
           }
         },
         "required": [
@@ -147,7 +162,8 @@
           "pricing",
           "features",
           "planModel",
-          "defaults"
+          "defaults",
+          "limits"
         ]
       },
       "ErrorResponse": {
@@ -810,6 +826,21 @@
           "refunded": {
             "type": "boolean"
           },
+          "startedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "providerStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "promptCompressed": {
+            "type": "boolean"
+          },
+          "promptLimitChars": {
+            "type": "integer",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string"
           },
@@ -843,6 +874,10 @@
           "outputPurgedAt",
           "errorMessage",
           "refunded",
+          "startedAt",
+          "providerStatus",
+          "promptCompressed",
+          "promptLimitChars",
           "createdAt",
           "completedAt"
         ]
@@ -928,6 +963,10 @@
           "tokenCost": {
             "type": "integer"
           },
+          "maxPromptChars": {
+            "type": "integer",
+            "nullable": true
+          },
           "isActive": {
             "type": "boolean"
           },
@@ -947,6 +986,7 @@
           "source",
           "allowedParams",
           "tokenCost",
+          "maxPromptChars",
           "isActive",
           "isDefault"
         ]
@@ -1020,13 +1060,25 @@
               "attachments",
               "preContext"
             ]
+          },
+          "limit": {
+            "type": "object",
+            "properties": {
+              "promptChars": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "promptChars"
+            ]
           }
         },
         "required": [
           "blueprint",
           "cost",
           "workspace",
-          "analysis"
+          "analysis",
+          "limit"
         ]
       },
       "CreateGenerationResponse": {
@@ -1042,6 +1094,75 @@
         "required": [
           "generation",
           "workspace"
+        ]
+      },
+      "ActiveGeneration": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "folderId": {
+            "type": "string"
+          },
+          "folderName": {
+            "type": "string"
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string",
+            "enum": [
+              "VIDEO",
+              "IMAGE"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "RENDERING",
+              "COMPLETED",
+              "FAILED"
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "providerStatus": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": "string",
+            "nullable": true
+          },
+          "tokensCharged": {
+            "type": "integer"
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "folderId",
+          "folderName",
+          "modelName",
+          "mediaType",
+          "status",
+          "startedAt",
+          "providerStatus",
+          "createdAt",
+          "completedAt",
+          "tokensCharged",
+          "errorMessage"
         ]
       },
       "FolderContext": {
@@ -1649,6 +1770,29 @@
           "mediaType",
           "allowedParams",
           "tokenCost"
+        ]
+      },
+      "LimitsSettings": {
+        "type": "object",
+        "properties": {
+          "generationsPerDayPerWorkspace": {
+            "type": "integer"
+          },
+          "planRequestsPerHourPerUser": {
+            "type": "integer"
+          },
+          "planPromptMaxChars": {
+            "type": "integer"
+          },
+          "finalPromptMaxChars": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "generationsPerDayPerWorkspace",
+          "planRequestsPerHourPerUser",
+          "planPromptMaxChars",
+          "finalPromptMaxChars"
         ]
       },
       "StorageSettings": {
@@ -3893,16 +4037,39 @@
         "tags": [
           "Creator generations"
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true"
+              ]
+            },
+            "required": false,
+            "name": "active",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Recent generations in the workspace",
+            "description": "Recent generations, or the workspace's in-flight ones with ?active=true",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Generation"
-                  }
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Generation"
+                      }
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ActiveGeneration"
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -5672,6 +5839,12 @@
                   "tokenCost": {
                     "type": "integer"
                   },
+                  "maxPromptChars": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 32000
+                  },
                   "isActive": {
                     "type": "boolean",
                     "default": true
@@ -5829,6 +6002,12 @@
                   },
                   "tokenCost": {
                     "type": "integer"
+                  },
+                  "maxPromptChars": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 32000
                   },
                   "allowedParams": {
                     "type": "object",
@@ -6090,6 +6269,89 @@
           },
           "400": {
             "description": "Invalid model or capability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/settings/limits": {
+      "get": {
+        "tags": [
+          "CMS settings"
+        ],
+        "responses": {
+          "200": {
+            "description": "Quota and prompt ceilings",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsSettings"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "CMS settings"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "generationsPerDayPerWorkspace": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 1000
+                  },
+                  "planRequestsPerHourPerUser": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10000
+                  },
+                  "planPromptMaxChars": {
+                    "type": "integer",
+                    "minimum": 200,
+                    "maximum": 20000
+                  },
+                  "finalPromptMaxChars": {
+                    "type": "integer",
+                    "minimum": 200,
+                    "maximum": 32000
+                  }
+                },
+                "required": [
+                  "generationsPerDayPerWorkspace",
+                  "planRequestsPerHourPerUser",
+                  "planPromptMaxChars",
+                  "finalPromptMaxChars"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Limits saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LimitsSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid limits",
             "content": {
               "application/json": {
                 "schema": {

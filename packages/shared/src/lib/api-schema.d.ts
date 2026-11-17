@@ -1922,20 +1922,22 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    active?: "true";
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
             };
             requestBody?: never;
             responses: {
-                /** @description Recent generations in the workspace */
+                /** @description Recent generations, or the workspace's in-flight ones with ?active=true */
                 200: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["Generation"][];
+                        "application/json": components["schemas"]["Generation"][] | components["schemas"]["ActiveGeneration"][];
                     };
                 };
             };
@@ -3563,6 +3565,7 @@ export interface paths {
                             aspectRatios: string[];
                         };
                         tokenCost: number;
+                        maxPromptChars?: number | null;
                         /** @default true */
                         isActive?: boolean;
                     };
@@ -3682,6 +3685,7 @@ export interface paths {
                         outputCapabilities?: ("TEXT" | "IMAGE" | "VIDEO")[];
                         source?: string;
                         tokenCost?: number;
+                        maxPromptChars?: number | null;
                         allowedParams?: {
                             durations?: number[];
                             resolutions: string[];
@@ -3863,6 +3867,78 @@ export interface paths {
                     };
                 };
                 /** @description Invalid model or capability */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/settings/limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Quota and prompt ceilings */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LimitsSettings"];
+                    };
+                };
+            };
+        };
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        generationsPerDayPerWorkspace: number;
+                        planRequestsPerHourPerUser: number;
+                        planPromptMaxChars: number;
+                        finalPromptMaxChars: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Limits saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["LimitsSettings"];
+                    };
+                };
+                /** @description Invalid limits */
                 400: {
                     headers: {
                         [name: string]: unknown;
@@ -4334,6 +4410,10 @@ export interface components {
             defaults: {
                 videoModelId: string | null;
             };
+            limits: {
+                planPromptMaxChars: number;
+                finalPromptMaxChars: number;
+            };
         };
         ErrorResponse: {
             error: {
@@ -4493,6 +4573,10 @@ export interface components {
             outputPurgedAt: string | null;
             errorMessage: string | null;
             refunded: boolean;
+            startedAt: string | null;
+            providerStatus: string | null;
+            promptCompressed: boolean;
+            promptLimitChars: number | null;
             createdAt: string;
             completedAt: string | null;
         };
@@ -4513,6 +4597,7 @@ export interface components {
                 aspectRatios: string[];
             };
             tokenCost: number;
+            maxPromptChars: number | null;
             isActive: boolean;
             isDefault: boolean;
         };
@@ -4534,10 +4619,29 @@ export interface components {
                 }[];
                 preContext: string;
             };
+            limit: {
+                promptChars: number;
+            };
         };
         CreateGenerationResponse: {
             generation: components["schemas"]["Generation"];
             workspace: components["schemas"]["Workspace"];
+        };
+        ActiveGeneration: {
+            id: string;
+            folderId: string;
+            folderName: string;
+            modelName: string;
+            /** @enum {string} */
+            mediaType: "VIDEO" | "IMAGE";
+            /** @enum {string} */
+            status: "QUEUED" | "RENDERING" | "COMPLETED" | "FAILED";
+            startedAt: string | null;
+            providerStatus: string | null;
+            createdAt: string;
+            completedAt: string | null;
+            tokensCharged: number;
+            errorMessage: string | null;
         };
         FolderContext: {
             id: string;
@@ -4678,6 +4782,12 @@ export interface components {
                 aspectRatios: string[];
             };
             tokenCost: number;
+        };
+        LimitsSettings: {
+            generationsPerDayPerWorkspace: number;
+            planRequestsPerHourPerUser: number;
+            planPromptMaxChars: number;
+            finalPromptMaxChars: number;
         };
         StorageSettings: {
             /** @enum {string} */
