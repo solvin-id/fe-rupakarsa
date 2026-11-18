@@ -21,6 +21,7 @@ import {
 } from "@rupakarsa/shared/hooks/use-projects";
 import { queryKeys } from "@rupakarsa/shared/lib/api/keys";
 import { formatDateTime, formatRelative, formatTokens } from "@rupakarsa/shared/lib/format";
+import { mediaGates } from "@rupakarsa/shared/lib/inputs";
 import { pickModel } from "@rupakarsa/shared/lib/models";
 import { effectivePromptLimit } from "@rupakarsa/shared/lib/prompt";
 import type { Generation, GenerationStatus, MediaCapability, MediaType } from "@rupakarsa/shared/lib/types";
@@ -103,8 +104,11 @@ export function StudioView({ folderId }: { folderId: string }) {
   const config = configQuery.data;
 
   const planModelCapabilities: MediaCapability[] = config?.planModel?.inputCapabilities ?? [];
-  const allowImage = planModelCapabilities.includes("IMAGE");
-  const allowVideo = planModelCapabilities.includes("VIDEO");
+  const gates = mediaGates(config, planMode);
+  const allowImageAnalysis = gates.analysisImage;
+  const allowVideoAnalysis = gates.analysisVideo;
+  const allowImage = gates.attachmentImage;
+  const allowVideo = gates.attachmentVideo;
   const planModelMissing = config ? config.planModel === null : false;
 
   const activeModels = useMemo(
@@ -465,8 +469,10 @@ export function StudioView({ folderId }: { folderId: string }) {
 
       {planModelMissing ? (
         <div className="mt-4 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] leading-relaxed text-ink">
-          Model plan belum disetel. Setel di CMS → Settings → AI. Brief tetap bisa dirender dalam
-          mode langsung tanpa analisis lampiran.
+          Model plan belum disetel. Setel di CMS → Settings → AI. Plan mode membutuhkannya; mode
+          langsung tetap {allowImageAnalysis || allowVideoAnalysis
+            ? "menganalisis lampiran lewat model analisis"
+            : "merender brief tanpa analisis lampiran"}.
         </div>
       ) : null}
 
@@ -488,6 +494,7 @@ export function StudioView({ folderId }: { folderId: string }) {
             onAttachmentsChange={handleAttachmentsChange}
             allowImage={allowImage}
             allowVideo={allowVideo}
+            attachmentGate={planMode ? "plan" : "analysis"}
             balance={balance}
             tokenValueRupiah={config?.pricing.tokenValueRupiah ?? 500}
             onError={(message) => pushToast("error", message)}
@@ -501,7 +508,8 @@ export function StudioView({ folderId }: { folderId: string }) {
             continueFromPrevious={continueFromPrevious}
             onContinueChange={handleContinueChange}
             disabled={generating}
-            allowVideoAnalysis={allowVideo}
+            allowImageAnalysis={allowImageAnalysis}
+            allowVideoAnalysis={allowVideoAnalysis}
           />
         </div>
 

@@ -33,7 +33,10 @@ export interface PreContextPanelProps {
   continueFromPrevious: boolean;
   onContinueChange: (value: boolean) => void;
   disabled?: boolean;
+  /** The CMS-wired video analysis model accepts VIDEO. */
   allowVideoAnalysis: boolean;
+  /** The CMS-wired image analysis model accepts IMAGE (history renders can be either type). */
+  allowImageAnalysis: boolean;
 }
 
 /**
@@ -48,6 +51,7 @@ export function PreContextPanel({
   onContinueChange,
   disabled = false,
   allowVideoAnalysis,
+  allowImageAnalysis,
 }: PreContextPanelProps) {
   const pushToast = useUiStore((state) => state.pushToast);
   const createContext = useCreateFolderContextMutation(folderId);
@@ -62,13 +66,22 @@ export function PreContextPanel({
   const [historyId, setHistoryId] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const historyOptions = (generationsQuery.data ?? [])
+  /** A history row is only analyzable when its own media type has a wired analysis model. */
+  const historyRows = (generationsQuery.data ?? [])
     .filter((item) => item.status === "COMPLETED")
-    .slice(0, 20)
-    .map((item) => ({
-      value: item.id,
-      label: `${item.modelName} · ${formatRelative(item.createdAt)}`,
-    }));
+    .slice(0, 20);
+  const historyOptions = historyRows.map((item) => ({
+    value: item.id,
+    label: `${item.modelName} · ${item.mediaType === "VIDEO" ? "Video" : "Gambar"} · ${formatRelative(item.createdAt)}`,
+    disabled: item.mediaType === "VIDEO" ? !allowVideoAnalysis : !allowImageAnalysis,
+  }));
+  const analyzableHistory = historyOptions.filter((option) => !option.disabled);
+  const selectedHistory = historyRows.find((item) => item.id === historyId) ?? null;
+  const selectedAnalyzable = selectedHistory
+    ? selectedHistory.mediaType === "VIDEO"
+      ? allowVideoAnalysis
+      : allowImageAnalysis
+    : false;
 
   // The chain always plays in scene order, whatever order the list endpoint returned.
   const scenes = [...generations]
@@ -260,7 +273,8 @@ export function PreContextPanel({
           </Button>
           {!allowVideoAnalysis ? (
             <p className="mt-1.5 text-[10px] leading-relaxed text-muted">
-              Setel model analisis video di CMS → Settings → AI.
+              Setel <span className="font-medium text-ink">Analisis video</span> di CMS → Settings →
+              AI.
             </p>
           ) : null}
         </div>
@@ -271,22 +285,39 @@ export function PreContextPanel({
             className="mt-2"
             value={historyId}
             onChange={setHistoryId}
-            disabled={disabled || !allowVideoAnalysis || historyOptions.length === 0}
-            placeholder={historyOptions.length === 0 ? "Belum ada render selesai" : "Pilih render"}
+            disabled={disabled || analyzableHistory.length === 0}
+            placeholder={
+              historyOptions.length === 0
+                ? "Belum ada render selesai"
+                : analyzableHistory.length === 0
+                  ? "Tidak ada render yang bisa dianalisis"
+                  : "Pilih render"
+            }
             options={historyOptions}
           />
           <Button
             variant="secondary"
             size="sm"
             className="mt-2 w-full"
-            disabled={disabled || !allowVideoAnalysis || historyId.length === 0}
+            disabled={disabled || !selectedAnalyzable}
             onClick={addFromHistory}
           >
             Analisis riwayat
           </Button>
-          {!allowVideoAnalysis ? (
+          {!allowVideoAnalysis && !allowImageAnalysis ? (
             <p className="mt-1.5 text-[10px] leading-relaxed text-muted">
-              Setel model analisis video di CMS → Settings → AI.
+              Setel model <span className="font-medium text-ink">Analisis gambar</span> dan{" "}
+              <span className="font-medium text-ink">Analisis video</span> di CMS → Settings → AI.
+            </p>
+          ) : !allowVideoAnalysis ? (
+            <p className="mt-1.5 text-[10px] leading-relaxed text-muted">
+              Hasil video belum bisa dianalisis. Setel{" "}
+              <span className="font-medium text-ink">Analisis video</span> di CMS → Settings → AI.
+            </p>
+          ) : !allowImageAnalysis ? (
+            <p className="mt-1.5 text-[10px] leading-relaxed text-muted">
+              Hasil gambar belum bisa dianalisis. Setel{" "}
+              <span className="font-medium text-ink">Analisis gambar</span> di CMS → Settings → AI.
             </p>
           ) : null}
         </div>

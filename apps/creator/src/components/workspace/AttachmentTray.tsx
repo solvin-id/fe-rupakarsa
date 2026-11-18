@@ -10,6 +10,9 @@ import {
 } from "@/components/workspace/AssetDropzone";
 import type { ReferenceFile } from "@/components/workspace/AssetDropzone";
 
+/** Which service reads the attachments: the plan model, or the analysis models in direct mode. */
+export type AttachmentGate = "plan" | "analysis";
+
 export interface AttachmentTrayProps {
   attachments: ReferenceFile[];
   onChange: (attachments: ReferenceFile[]) => void;
@@ -17,6 +20,7 @@ export interface AttachmentTrayProps {
   max?: number;
   allowImage: boolean;
   allowVideo: boolean;
+  gate?: AttachmentGate;
   onError: (message: string) => void;
 }
 
@@ -31,6 +35,7 @@ export function AttachmentTray({
   max = 4,
   allowImage,
   allowVideo,
+  gate = "plan",
   onError,
 }: AttachmentTrayProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -59,11 +64,19 @@ export function AttachmentTray({
       }
       const kind = kindForMime(file.type);
       if (kind === "VIDEO" && !allowVideo) {
-        onError("Model plan tidak mendukung lampiran video.");
+        onError(
+          gate === "analysis"
+            ? "Model analisis video belum disetel di CMS → Settings → AI."
+            : "Model plan tidak mendukung lampiran video.",
+        );
         continue;
       }
       if (kind === "IMAGE" && !allowImage) {
-        onError("Model plan tidak mendukung lampiran gambar.");
+        onError(
+          gate === "analysis"
+            ? "Model analisis gambar belum disetel di CMS → Settings → AI."
+            : "Model plan tidak mendukung lampiran gambar.",
+        );
         continue;
       }
       const result = validateReferenceFile(file, kind === "VIDEO" ? "video" : "image");
@@ -92,7 +105,9 @@ export function AttachmentTray({
   if (!allowImage && !allowVideo) {
     return (
       <p className="rounded-xl border border-dashed border-border bg-surface-2/40 px-3 py-3 text-[11px] leading-relaxed text-muted">
-        Model plan saat ini tidak menerima lampiran gambar maupun video.
+        {gate === "analysis"
+          ? "Model analisis gambar dan video belum disetel di CMS → Settings → AI."
+          : "Model plan saat ini tidak menerima lampiran gambar maupun video."}
       </p>
     );
   }

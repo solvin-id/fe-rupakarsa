@@ -3,6 +3,7 @@
 import { CircleDollarSign, Film, Image as ImageIcon, Info, Sparkles } from "lucide-react";
 
 import { AttachmentTray } from "@/components/workspace/AttachmentTray";
+import type { AttachmentGate } from "@/components/workspace/AttachmentTray";
 import type { ReferenceFile } from "@/components/workspace/AssetDropzone";
 import { formatRupiahFromTokens, formatTokens } from "@rupakarsa/shared/lib/format";
 import { tokenCapacity } from "@rupakarsa/shared/lib/tokens";
@@ -25,6 +26,8 @@ export interface GeneratorPanelProps {
   onAttachmentsChange: (attachments: ReferenceFile[]) => void;
   allowImage: boolean;
   allowVideo: boolean;
+  /** Plan mode reads attachments through the plan model; direct mode analyses them. */
+  attachmentGate: AttachmentGate;
   balance: number;
   tokenValueRupiah: number;
   onError: (message: string) => void;
@@ -47,6 +50,7 @@ export function GeneratorPanel({
   onAttachmentsChange,
   allowImage,
   allowVideo,
+  attachmentGate,
   balance,
   tokenValueRupiah,
   onError,
@@ -185,6 +189,7 @@ export function GeneratorPanel({
             disabled={disabled}
             allowImage={allowImage}
             allowVideo={allowVideo}
+            gate={attachmentGate}
             onError={onError}
           />
         </div>
