@@ -61,6 +61,16 @@ export function formatDuration(seconds: number | undefined): string {
   return seconds ? `${seconds}s` : "—";
 }
 
+/** Render-time estimate: `45 dtk`, `2 mnt 10 dtk`, or an em dash when nothing is known. */
+export function formatDurationMs(ms: number | null): string {
+  if (ms === null || !Number.isFinite(ms) || ms <= 0) return "—";
+  const totalSeconds = Math.round(ms / 1000);
+  if (totalSeconds < 60) return `${totalSeconds} dtk`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds === 0 ? `${minutes} mnt` : `${minutes} mnt ${seconds} dtk`;
+}
+
 export function formatCount(value: number): string {
   return numberFormatter.format(value);
 }

@@ -12,7 +12,13 @@ import type {
   UpdateProviderInput,
 } from "../lib/api/endpoints";
 import { queryKeys } from "../lib/api/keys";
-import type { AdminContact, LimitsSettings, Workspace } from "../lib/types";
+import type {
+  AdminContact,
+  AiActivityFilters,
+  AiCharacterReference,
+  LimitsSettings,
+  Workspace,
+} from "../lib/types";
 
 export function useAdminAccountsQuery() {
   return useQuery({ queryKey: queryKeys.admin.accounts, queryFn: cmsApi.accounts });
@@ -193,6 +199,9 @@ export function useUpdateModelMutation() {
         inputCapabilities: input.inputCapabilities,
         outputCapabilities: input.outputCapabilities,
         tokenCost: input.tokenCost,
+        maxPromptChars: input.maxPromptChars,
+        thinkingEnabled: input.thinkingEnabled,
+        customReferenceId: input.customReferenceId,
         allowedParams: input.allowedParams,
         isActive: input.isActive,
       }),
@@ -210,6 +219,43 @@ export function useUpdateContactMutation() {
       queryClient.setQueryData(queryKeys.admin.contact, contact);
       void queryClient.invalidateQueries({ queryKey: queryKeys.config });
     },
+  });
+}
+
+export function useAdminCharactersQuery() {
+  return useQuery({ queryKey: queryKeys.admin.characters, queryFn: cmsApi.characters });
+}
+
+export function useCreateCharacterMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; modelVersion: "v1" | "v2" | "cinema"; imageUrls: string[] }) =>
+      cmsApi.createCharacter(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.characters });
+    },
+  });
+}
+
+export function useRefreshCharacterMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (characterId: string) => cmsApi.refreshCharacter(characterId),
+    onSuccess: (row: AiCharacterReference) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.characters });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.models });
+      void queryClient.setQueryData<AiCharacterReference[]>(
+        queryKeys.admin.characters,
+        (current) => current?.map((item) => (item.id === row.id ? row : item)) ?? [row],
+      );
+    },
+  });
+}
+
+export function useAiActivityQuery(filters: AiActivityFilters) {
+  return useQuery({
+    queryKey: queryKeys.admin.aiActivity(filters),
+    queryFn: () => cmsApi.aiActivity(filters),
   });
 }
 

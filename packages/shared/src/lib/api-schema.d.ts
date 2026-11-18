@@ -1865,6 +1865,8 @@ export interface paths {
                         attachmentKeys?: string[];
                         /** @default [] */
                         contextIds?: string[];
+                        /** @default true */
+                        continueFromPrevious?: boolean;
                     };
                 };
             };
@@ -1970,6 +1972,8 @@ export interface paths {
                             resolution: string;
                             aspectRatio: string;
                         };
+                        /** @default true */
+                        continueFromPrevious?: boolean;
                     };
                 };
             };
@@ -3566,6 +3570,8 @@ export interface paths {
                         };
                         tokenCost: number;
                         maxPromptChars?: number | null;
+                        thinkingEnabled?: boolean;
+                        customReferenceId?: string | null;
                         /** @default true */
                         isActive?: boolean;
                     };
@@ -3686,6 +3692,8 @@ export interface paths {
                         source?: string;
                         tokenCost?: number;
                         maxPromptChars?: number | null;
+                        thinkingEnabled?: boolean;
+                        customReferenceId?: string | null;
                         allowedParams?: {
                             durations?: number[];
                             resolutions: string[];
@@ -4374,6 +4382,221 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/cms/ai-activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: {
+                    page?: number;
+                    limit?: number;
+                    q?: string;
+                    kind?: "PLAN" | "ANALYSIS" | "COMPRESS" | "RENDER_SUBMIT" | "RENDER_STATUS" | "RENDER_COMPLETE" | "RENDER_FAIL" | "MODEL_SYNC" | "PROVIDER_TEST" | "CHARACTER_TRAIN";
+                    status?: "SUCCESS" | "ERROR" | "PENDING";
+                    providerId?: string;
+                    modelId?: string;
+                    workspaceId?: string;
+                    mediaType?: "VIDEO" | "IMAGE";
+                    from?: string;
+                    to?: string;
+                    orderBy?: "createdAt" | "latencyMs" | "tokensUsed";
+                    order?: "asc" | "desc";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description AI activity page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AiActivityPage"];
+                    };
+                };
+                /** @description No session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description No CMS access */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/higgsfield/characters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Soul ID references, newest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AiCharacterReference"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        /**
+                         * @default v1
+                         * @enum {string}
+                         */
+                        modelVersion?: "v1" | "v2" | "cinema";
+                        imageUrls: string[];
+                    };
+                };
+            };
+            responses: {
+                /** @description Training queued */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AiCharacterReference"];
+                    };
+                };
+                /** @description Invalid payload */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Provider key missing */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Provider rate limit */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/cms/higgsfield/characters/{id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Reference state after the provider poll */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AiCharacterReference"];
+                    };
+                };
+                /** @description Reference not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+                /** @description Provider rate limit */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorResponse"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4558,6 +4781,7 @@ export interface components {
             analysisSnapshot: string;
             preContextSnapshot: string;
             referenceImageUrl: string | null;
+            sequence: number;
             selectedParams: {
                 durationSec?: number;
                 resolution: string;
@@ -4577,6 +4801,8 @@ export interface components {
             providerStatus: string | null;
             promptCompressed: boolean;
             promptLimitChars: number | null;
+            estimateMs: number | null;
+            progressPercent: number | null;
             createdAt: string;
             completedAt: string | null;
         };
@@ -4598,6 +4824,8 @@ export interface components {
             };
             tokenCost: number;
             maxPromptChars: number | null;
+            thinkingEnabled: boolean;
+            customReferenceId: string | null;
             isActive: boolean;
             isDefault: boolean;
         };
@@ -4642,6 +4870,8 @@ export interface components {
             completedAt: string | null;
             tokensCharged: number;
             errorMessage: string | null;
+            estimateMs: number | null;
+            progressPercent: number | null;
         };
         FolderContext: {
             id: string;
@@ -4851,6 +5081,66 @@ export interface components {
             };
             ip: string;
             createdAt: string;
+        };
+        AiActivity: {
+            id: string;
+            workspaceId: string | null;
+            workspaceName: string | null;
+            userId: string | null;
+            folderId: string | null;
+            generationId: string | null;
+            /** @enum {string} */
+            kind: "PLAN" | "ANALYSIS" | "COMPRESS" | "RENDER_SUBMIT" | "RENDER_STATUS" | "RENDER_COMPLETE" | "RENDER_FAIL" | "MODEL_SYNC" | "PROVIDER_TEST" | "CHARACTER_TRAIN";
+            /** @enum {string} */
+            status: "SUCCESS" | "ERROR" | "PENDING";
+            providerId: string | null;
+            providerName: string | null;
+            modelId: string | null;
+            modelName: string;
+            /** @enum {string|null} */
+            mediaType: "VIDEO" | "IMAGE" | null;
+            latencyMs: number;
+            promptChars: number;
+            responseChars: number;
+            tokensUsed: number;
+            externalJobId: string | null;
+            errorCode: string | null;
+            errorMessage: string | null;
+            requestText: string;
+            responseText: string;
+            metadata: {
+                [key: string]: unknown;
+            };
+            createdAt: string;
+        };
+        AiActivityPage: {
+            rows: components["schemas"]["AiActivity"][];
+            total: number;
+            page: number;
+            limit: number;
+            stats: {
+                total: number;
+                success: number;
+                error: number;
+                avgLatencyMs: number;
+                tokensUsed: number;
+            };
+        };
+        AiCharacterReference: {
+            id: string;
+            providerId: string;
+            name: string;
+            modelVersion: string;
+            externalId: string | null;
+            /** @enum {string} */
+            status: "NOT_READY" | "QUEUED" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
+            thumbnailUrl: string | null;
+            failReason: string | null;
+            inputImageUrls: string[];
+            createdByUserId: string | null;
+            createdAt: string;
+            updatedAt: string;
+            completedAt: string | null;
         };
     };
     responses: never;

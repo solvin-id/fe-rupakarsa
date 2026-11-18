@@ -3,6 +3,9 @@ import { apiRequest, apiUpload } from "./client";
 import type {
   ActiveGeneration,
   AdminContact,
+  AiActivityFilters,
+  AiActivityPage,
+  AiCharacterReference,
   AdminWorkspacesPayload,
   AiModel,
   AiProvider,
@@ -60,6 +63,7 @@ export interface PlanGenerationInput {
   aspectRatio: string;
   attachmentKeys: string[];
   contextIds: string[];
+  continueFromPrevious: boolean;
 }
 
 export interface CreateGenerationInput {
@@ -71,6 +75,7 @@ export interface CreateGenerationInput {
   attachmentKeys: string[];
   contextIds: string[];
   selectedParams: GenerationParams;
+  continueFromPrevious: boolean;
 }
 
 export type AccountWorkspaceMode = "PERSONAL" | "EXISTING";
@@ -124,6 +129,8 @@ export interface CreateModelInput {
   allowedParams: ModelAllowedParams;
   tokenCost: number;
   maxPromptChars?: number | null;
+  thinkingEnabled?: boolean;
+  customReferenceId?: string | null;
   isActive: boolean;
 }
 
@@ -134,6 +141,8 @@ export interface UpdateModelInput {
   outputCapabilities?: MediaCapability[];
   tokenCost?: number;
   maxPromptChars?: number | null;
+  thinkingEnabled?: boolean;
+  customReferenceId?: string | null;
   allowedParams?: ModelAllowedParams;
   isActive?: boolean;
 }
@@ -163,6 +172,25 @@ function modelQuery(filters: ModelFilters): string {
   if (filters.active !== undefined) params.set("active", String(filters.active));
   const query = params.toString();
   return query.length > 0 ? `?${query}` : "";
+}
+
+/** Every filter is optional except paging/sorting, which the API always expects. */
+export function aiActivityQuery(filters: AiActivityFilters): string {
+  const params = new URLSearchParams();
+  params.set("page", String(filters.page));
+  params.set("limit", String(filters.limit));
+  params.set("orderBy", filters.orderBy);
+  params.set("order", filters.order);
+  if (filters.q) params.set("q", filters.q);
+  if (filters.kind) params.set("kind", filters.kind);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.providerId) params.set("providerId", filters.providerId);
+  if (filters.modelId) params.set("modelId", filters.modelId);
+  if (filters.workspaceId) params.set("workspaceId", filters.workspaceId);
+  if (filters.mediaType) params.set("mediaType", filters.mediaType);
+  if (filters.from) params.set("from", filters.from);
+  if (filters.to) params.set("to", filters.to);
+  return `?${params.toString()}`;
 }
 
 export function storageQuery(filters: StorageFilters): string {
@@ -406,6 +434,24 @@ export const cmsApi = {
   orders: () => apiRequest<CmsOrder[]>("/api/cms/orders"),
   markOrderPaid: (orderId: string) =>
     apiRequest<Workspace>(`/api/cms/orders/${orderId}/mark-paid`, { method: "POST" }),
+
+  aiActivity: (filters: AiActivityFilters) =>
+    apiRequest<AiActivityPage>(`/api/cms/ai-activity${aiActivityQuery(filters)}`),
+
+  characters: () => apiRequest<AiCharacterReference[]>("/api/cms/higgsfield/characters"),
+  createCharacter: (input: {
+    name: string;
+    modelVersion: "v1" | "v2" | "cinema";
+    imageUrls: string[];
+  }) =>
+    apiRequest<AiCharacterReference>("/api/cms/higgsfield/characters", {
+      method: "POST",
+      body: input,
+    }),
+  refreshCharacter: (characterId: string) =>
+    apiRequest<AiCharacterReference>(`/api/cms/higgsfield/characters/${characterId}/refresh`, {
+      method: "POST",
+    }),
 
   auditLogs: (before?: string) =>
     apiRequest<AuditLog[]>(

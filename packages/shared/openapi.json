@@ -770,6 +770,9 @@
             "type": "string",
             "nullable": true
           },
+          "sequence": {
+            "type": "integer"
+          },
           "selectedParams": {
             "type": "object",
             "properties": {
@@ -841,6 +844,14 @@
             "type": "integer",
             "nullable": true
           },
+          "estimateMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "progressPercent": {
+            "type": "integer",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string"
           },
@@ -864,6 +875,7 @@
           "analysisSnapshot",
           "preContextSnapshot",
           "referenceImageUrl",
+          "sequence",
           "selectedParams",
           "tokensCharged",
           "status",
@@ -878,6 +890,8 @@
           "providerStatus",
           "promptCompressed",
           "promptLimitChars",
+          "estimateMs",
+          "progressPercent",
           "createdAt",
           "completedAt"
         ]
@@ -967,6 +981,13 @@
             "type": "integer",
             "nullable": true
           },
+          "thinkingEnabled": {
+            "type": "boolean"
+          },
+          "customReferenceId": {
+            "type": "string",
+            "nullable": true
+          },
           "isActive": {
             "type": "boolean"
           },
@@ -987,6 +1008,8 @@
           "allowedParams",
           "tokenCost",
           "maxPromptChars",
+          "thinkingEnabled",
+          "customReferenceId",
           "isActive",
           "isDefault"
         ]
@@ -1148,6 +1171,14 @@
           "errorMessage": {
             "type": "string",
             "nullable": true
+          },
+          "estimateMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "progressPercent": {
+            "type": "integer",
+            "nullable": true
           }
         },
         "required": [
@@ -1162,7 +1193,9 @@
           "createdAt",
           "completedAt",
           "tokensCharged",
-          "errorMessage"
+          "errorMessage",
+          "estimateMs",
+          "progressPercent"
         ]
       },
       "FolderContext": {
@@ -2048,6 +2081,273 @@
           "metadata",
           "ip",
           "createdAt"
+        ]
+      },
+      "AiActivity": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "workspaceId": {
+            "type": "string",
+            "nullable": true
+          },
+          "workspaceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "userId": {
+            "type": "string",
+            "nullable": true
+          },
+          "folderId": {
+            "type": "string",
+            "nullable": true
+          },
+          "generationId": {
+            "type": "string",
+            "nullable": true
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "PLAN",
+              "ANALYSIS",
+              "COMPRESS",
+              "RENDER_SUBMIT",
+              "RENDER_STATUS",
+              "RENDER_COMPLETE",
+              "RENDER_FAIL",
+              "MODEL_SYNC",
+              "PROVIDER_TEST",
+              "CHARACTER_TRAIN"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "SUCCESS",
+              "ERROR",
+              "PENDING"
+            ]
+          },
+          "providerId": {
+            "type": "string",
+            "nullable": true
+          },
+          "providerName": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelId": {
+            "type": "string",
+            "nullable": true
+          },
+          "modelName": {
+            "type": "string"
+          },
+          "mediaType": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "VIDEO",
+              "IMAGE"
+            ]
+          },
+          "latencyMs": {
+            "type": "integer"
+          },
+          "promptChars": {
+            "type": "integer"
+          },
+          "responseChars": {
+            "type": "integer"
+          },
+          "tokensUsed": {
+            "type": "integer"
+          },
+          "externalJobId": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "requestText": {
+            "type": "string"
+          },
+          "responseText": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspaceId",
+          "workspaceName",
+          "userId",
+          "folderId",
+          "generationId",
+          "kind",
+          "status",
+          "providerId",
+          "providerName",
+          "modelId",
+          "modelName",
+          "mediaType",
+          "latencyMs",
+          "promptChars",
+          "responseChars",
+          "tokensUsed",
+          "externalJobId",
+          "errorCode",
+          "errorMessage",
+          "requestText",
+          "responseText",
+          "metadata",
+          "createdAt"
+        ]
+      },
+      "AiActivityPage": {
+        "type": "object",
+        "properties": {
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiActivity"
+            }
+          },
+          "total": {
+            "type": "integer"
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "stats": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": "integer"
+              },
+              "success": {
+                "type": "integer"
+              },
+              "error": {
+                "type": "integer"
+              },
+              "avgLatencyMs": {
+                "type": "integer"
+              },
+              "tokensUsed": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "total",
+              "success",
+              "error",
+              "avgLatencyMs",
+              "tokensUsed"
+            ]
+          }
+        },
+        "required": [
+          "rows",
+          "total",
+          "page",
+          "limit",
+          "stats"
+        ]
+      },
+      "AiCharacterReference": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "modelVersion": {
+            "type": "string"
+          },
+          "externalId": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NOT_READY",
+              "QUEUED",
+              "IN_PROGRESS",
+              "COMPLETED",
+              "FAILED"
+            ]
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "failReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "inputImageUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdByUserId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "providerId",
+          "name",
+          "modelVersion",
+          "externalId",
+          "status",
+          "thumbnailUrl",
+          "failReason",
+          "inputImageUrls",
+          "createdByUserId",
+          "createdAt",
+          "updatedAt",
+          "completedAt"
         ]
       }
     },
@@ -3848,6 +4148,10 @@
                       "format": "uuid"
                     },
                     "default": []
+                  },
+                  "continueFromPrevious": {
+                    "type": "boolean",
+                    "default": true
                   }
                 },
                 "required": [
@@ -3968,6 +4272,10 @@
                       "resolution",
                       "aspectRatio"
                     ]
+                  },
+                  "continueFromPrevious": {
+                    "type": "boolean",
+                    "default": true
                   }
                 },
                 "required": [
@@ -5842,8 +6150,15 @@
                   "maxPromptChars": {
                     "type": "integer",
                     "nullable": true,
-                    "minimum": 0,
+                    "minimum": 1,
                     "maximum": 32000
+                  },
+                  "thinkingEnabled": {
+                    "type": "boolean"
+                  },
+                  "customReferenceId": {
+                    "type": "string",
+                    "nullable": true
                   },
                   "isActive": {
                     "type": "boolean",
@@ -6006,8 +6321,15 @@
                   "maxPromptChars": {
                     "type": "integer",
                     "nullable": true,
-                    "minimum": 0,
+                    "minimum": 1,
                     "maximum": 32000
+                  },
+                  "thinkingEnabled": {
+                    "type": "boolean"
+                  },
+                  "customReferenceId": {
+                    "type": "string",
+                    "nullable": true
                   },
                   "allowedParams": {
                     "type": "object",
@@ -6799,6 +7121,350 @@
           },
           "400": {
             "description": "Invalid cursor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/ai-activity": {
+      "get": {
+        "tags": [
+          "CMS AI activity"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 100,
+              "default": 25
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PLAN",
+                "ANALYSIS",
+                "COMPRESS",
+                "RENDER_SUBMIT",
+                "RENDER_STATUS",
+                "RENDER_COMPLETE",
+                "RENDER_FAIL",
+                "MODEL_SYNC",
+                "PROVIDER_TEST",
+                "CHARACTER_TRAIN"
+              ]
+            },
+            "required": false,
+            "name": "kind",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "SUCCESS",
+                "ERROR",
+                "PENDING"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "providerId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "modelId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "workspaceId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "VIDEO",
+                "IMAGE"
+              ]
+            },
+            "required": false,
+            "name": "mediaType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": false,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": false,
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "createdAt",
+                "latencyMs",
+                "tokensUsed"
+              ],
+              "default": "createdAt"
+            },
+            "required": false,
+            "name": "orderBy",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            },
+            "required": false,
+            "name": "order",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AI activity page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiActivityPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No CMS access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/higgsfield/characters": {
+      "get": {
+        "tags": [
+          "CMS Higgsfield"
+        ],
+        "responses": {
+          "200": {
+            "description": "Soul ID references, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AiCharacterReference"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "CMS Higgsfield"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "modelVersion": {
+                    "type": "string",
+                    "enum": [
+                      "v1",
+                      "v2",
+                      "cinema"
+                    ],
+                    "default": "v1"
+                  },
+                  "imageUrls": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "name",
+                  "imageUrls"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Training queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiCharacterReference"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Provider key missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Provider rate limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/cms/higgsfield/characters/{id}/refresh": {
+      "post": {
+        "tags": [
+          "CMS Higgsfield"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reference state after the provider poll",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiCharacterReference"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Reference not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Provider rate limit",
             "content": {
               "application/json": {
                 "schema": {

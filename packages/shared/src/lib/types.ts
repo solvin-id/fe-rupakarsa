@@ -164,6 +164,8 @@ export interface Generation {
   analysisSnapshot: string;
   preContextSnapshot: string;
   referenceImageUrl: string | null;
+  /** Position of the render inside its folder; the scene chain orders on it. */
+  sequence: number;
   selectedParams: GenerationParams;
   tokensCharged: number;
   status: GenerationStatus;
@@ -178,6 +180,10 @@ export interface Generation {
   providerStatus: string | null;
   promptCompressed: boolean;
   promptLimitChars: number | null;
+  /** Historical average render time of the model, used to draw a percentage. */
+  estimateMs: number | null;
+  /** 0..95 while rendering, 100 when completed, null when failed. */
+  progressPercent: number | null;
   createdAt: string;
   completedAt: string | null;
 }
@@ -196,6 +202,8 @@ export interface ActiveGeneration {
   completedAt: string | null;
   tokensCharged: number;
   errorMessage: string | null;
+  estimateMs: number | null;
+  progressPercent: number | null;
 }
 
 export interface AiProvider {
@@ -233,6 +241,10 @@ export interface AiModel {
   allowedParams: ModelAllowedParams;
   tokenCost: number;
   maxPromptChars: number | null;
+  /** Deep Thinking flag for Wan 3.0 workflows. */
+  thinkingEnabled: boolean;
+  /** Soul ID (custom reference) uuid passed to SOUL models. */
+  customReferenceId: string | null;
   isActive: boolean;
   isDefault: boolean;
 }
@@ -445,6 +457,99 @@ export interface Order {
 
 export interface CmsOrder extends Order {
   workspaceName: string;
+}
+
+export type AiActivityKind =
+  | "PLAN"
+  | "ANALYSIS"
+  | "COMPRESS"
+  | "RENDER_SUBMIT"
+  | "RENDER_STATUS"
+  | "RENDER_COMPLETE"
+  | "RENDER_FAIL"
+  | "MODEL_SYNC"
+  | "PROVIDER_TEST"
+  | "CHARACTER_TRAIN";
+
+export type AiActivityStatus = "SUCCESS" | "ERROR" | "PENDING";
+
+export interface AiActivity {
+  id: string;
+  workspaceId: string | null;
+  workspaceName: string | null;
+  userId: string | null;
+  folderId: string | null;
+  generationId: string | null;
+  kind: AiActivityKind;
+  status: AiActivityStatus;
+  providerId: string | null;
+  providerName: string | null;
+  modelId: string | null;
+  modelName: string;
+  mediaType: MediaType | null;
+  latencyMs: number;
+  promptChars: number;
+  responseChars: number;
+  tokensUsed: number;
+  externalJobId: string | null;
+  errorCode: string | null;
+  errorMessage: string | null;
+  requestText: string;
+  responseText: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface AiActivityStats {
+  total: number;
+  success: number;
+  error: number;
+  avgLatencyMs: number;
+  tokensUsed: number;
+}
+
+export interface AiActivityPage {
+  rows: AiActivity[];
+  total: number;
+  page: number;
+  limit: number;
+  stats: AiActivityStats;
+}
+
+export type AiActivityOrderBy = "createdAt" | "latencyMs" | "tokensUsed";
+
+export interface AiActivityFilters {
+  page: number;
+  limit: number;
+  q?: string;
+  kind?: AiActivityKind;
+  status?: AiActivityStatus;
+  providerId?: string;
+  modelId?: string;
+  workspaceId?: string;
+  mediaType?: MediaType;
+  from?: string;
+  to?: string;
+  orderBy: AiActivityOrderBy;
+  order: "asc" | "desc";
+}
+
+export type AiCharacterStatus = "NOT_READY" | "QUEUED" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
+
+export interface AiCharacterReference {
+  id: string;
+  providerId: string;
+  name: string;
+  modelVersion: string;
+  externalId: string | null;
+  status: AiCharacterStatus;
+  thumbnailUrl: string | null;
+  failReason: string | null;
+  inputImageUrls: string[];
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
 }
 
 export interface AuditLog {

@@ -1,4 +1,5 @@
 import type { StorageFilters } from "./endpoints";
+import type { AiActivityFilters } from "../types";
 
 export const queryKeys = {
   session: ["session"] as const,
@@ -29,5 +30,7 @@ export const queryKeys = {
     mail: ["admin", "mail"] as const,
     orders: ["admin", "orders"] as const,
     audit: ["admin", "audit"] as const,
+    aiActivity: (filters: AiActivityFilters) => ["admin", "ai-activity", filters] as const,
+    characters: ["admin", "characters"] as const,
   },
 };
