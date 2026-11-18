@@ -19,6 +19,7 @@ const baseGeneration: Generation = {
   analysisSnapshot: "",
   preContextSnapshot: "",
   referenceImageUrl: null,
+  sequence: 1,
   selectedParams: { durationSec: 10, resolution: "1080p", aspectRatio: "16:9" },
   tokensCharged: 35,
   status: "COMPLETED",
@@ -33,6 +34,8 @@ const baseGeneration: Generation = {
   providerStatus: "rendering",
   promptCompressed: false,
   promptLimitChars: null,
+  estimateMs: 90_000,
+  progressPercent: 100,
   createdAt: "2026-11-16T05:30:00.000Z",
   completedAt: "2026-11-16T05:30:02.000Z",
 };
@@ -52,8 +55,11 @@ function renderCard(overrides: Partial<Generation>) {
 }
 
 describe("GenerationCard", () => {
-  it("renders a poster video for a completed video render instead of a broken img", () => {
-    const { container } = renderCard({ outputUrl: "https://api.test/media/generations/a.mp4" });
+  it("renders a video element for a completed mp4 render instead of a broken img", () => {
+    const { container } = renderCard({
+      outputUrl: "https://api.test/media/generations/a.mp4",
+      outputMime: "video/mp4",
+    });
     const video = container.querySelector("video");
     expect(video).not.toBeNull();
     expect(video).toHaveAttribute("src", "https://api.test/media/generations/a.mp4#t=0.1");

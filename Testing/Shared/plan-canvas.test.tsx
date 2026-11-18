@@ -59,6 +59,9 @@ const baseProps = {
   promptLimitChars: 2000,
   renderPromptLimit: 4000,
   compressing: false,
+  progressPercent: null,
+  estimateMs: null,
+  completedFlash: false,
 };
 
 describe("PlanCanvas plan mode", () => {
@@ -68,6 +71,46 @@ describe("PlanCanvas plan mode", () => {
     expect(screen.queryByText(/Buat Plan/)).toBeDisabled();
     expect(screen.getByText("Generate sekarang")).toBeInTheDocument();
     expect(screen.getByText("ANALYSED SUBJECT")).toBeInTheDocument();
+  });
+
+  it("shows the estimated percentage of a running render", () => {
+    render(
+      <PlanCanvas
+        {...baseProps}
+        generating
+        activeStatus="RENDERING"
+        progressPercent={62}
+        estimateMs={90_000}
+      />,
+    );
+
+    expect(screen.getByTestId("render-percent")).toHaveTextContent("62%");
+    expect(screen.getByText(/≈ 1 mnt 30 dtk \(rata-rata render sebelumnya\)/)).toBeInTheDocument();
+  });
+
+  it("labels a queued render as waiting for the worker", () => {
+    render(<PlanCanvas {...baseProps} generating activeStatus="QUEUED" progressPercent={0} />);
+    expect(screen.getByText("0% — menunggu worker")).toBeInTheDocument();
+  });
+
+  it("flashes 100% after a render completes", () => {
+    render(<PlanCanvas {...baseProps} completedFlash />);
+    expect(screen.getByTestId("render-completed")).toHaveTextContent("100%");
+  });
+
+  it("warns when the planned prompt exceeds the model limit and can trim it", () => {
+    render(
+      <PlanCanvas
+        {...baseProps}
+        planState="ready"
+        plannedPrompt={"kata ".repeat(30).trim()}
+        renderPromptLimit={50}
+      />,
+    );
+
+    expect(screen.getByTestId("plan-prompt-limit")).toHaveTextContent("149/50");
+    expect(screen.getByText(/batas model 50/)).toBeInTheDocument();
+    expect(screen.getByText("Pangkas ke batas")).toBeInTheDocument();
   });
 
   it("warns about attachment types the plan model cannot read", () => {

@@ -33,6 +33,7 @@ const finished: Generation = {
   analysisSnapshot: "",
   preContextSnapshot: "",
   referenceImageUrl: null,
+  sequence: 1,
   selectedParams: { durationSec: 10, resolution: "1080p", aspectRatio: "16:9" },
   tokensCharged: 35,
   status: "COMPLETED",
@@ -47,6 +48,8 @@ const finished: Generation = {
   providerStatus: "done",
   promptCompressed: true,
   promptLimitChars: 120,
+  estimateMs: 90_000,
+  progressPercent: 100,
   createdAt: job.createdAt,
   completedAt: "2026-11-16T05:31:00.000Z",
 };
