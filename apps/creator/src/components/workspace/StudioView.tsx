@@ -22,6 +22,7 @@ import {
 import { queryKeys } from "@rupakarsa/shared/lib/api/keys";
 import { formatDateTime, formatRelative, formatTokens } from "@rupakarsa/shared/lib/format";
 import { pickModel } from "@rupakarsa/shared/lib/models";
+import { effectivePromptLimit } from "@rupakarsa/shared/lib/prompt";
 import type { Generation, GenerationStatus, MediaCapability, MediaType } from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 import { Button } from "@rupakarsa/shared/ui";
@@ -43,10 +44,16 @@ const STATUS_LABEL: Record<GenerationStatus, string> = {
 };
 
 const PLAN_MODE_KEY = "rupakarsa.planMode";
+const CONTINUE_SCENE_KEY = "rupakarsa.continueScene";
 
 function readPlanMode(): boolean {
   if (typeof window === "undefined") return true;
   return window.localStorage.getItem(PLAN_MODE_KEY) !== "false";
+}
+
+function readContinueScene(): boolean {
+  if (typeof window === "undefined") return true;
+  return window.localStorage.getItem(CONTINUE_SCENE_KEY) !== "false";
 }
 
 export function StudioView({ folderId }: { folderId: string }) {
@@ -78,12 +85,14 @@ export function StudioView({ folderId }: { folderId: string }) {
   const [negativePrompt, setNegativePrompt] = useState("");
   const [planReady, setPlanReady] = useState(false);
   const [planMode, setPlanMode] = useState<boolean>(readPlanMode);
+  const [continueFromPrevious, setContinueFromPrevious] = useState<boolean>(readContinueScene);
   const [attachments, setAttachments] = useState<ReferenceFile[]>([]);
   const [analysisText, setAnalysisText] = useState("");
   const [simulateFailure, setSimulateFailure] = useState(false);
   const [activeGenerationId, setActiveGenerationId] = useState<string | null>(null);
   const [detail, setDetail] = useState<Generation | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Generation | null>(null);
+  const [completedFlash, setCompletedFlash] = useState(false);
 
   const handledStatusRef = useRef<string | null>(null);
   const uploadedKeysRef = useRef<Map<File, string>>(new Map());
@@ -139,6 +148,7 @@ export function StudioView({ folderId }: { folderId: string }) {
     handledStatusRef.current = `${current.id}:${current.status}`;
 
     setActiveGenerationId(null);
+    if (current.status === "COMPLETED") setCompletedFlash(true);
     void queryClient.invalidateQueries({ queryKey: queryKeys.generations(folderId) });
     void queryClient.invalidateQueries({ queryKey: queryKeys.folders });
     void queryClient.invalidateQueries({ queryKey: queryKeys.session });
@@ -150,6 +160,13 @@ export function StudioView({ folderId }: { folderId: string }) {
         : "Render gagal. Token dikembalikan otomatis.",
     );
   }, [activeGeneration, activeGenerationId, folderId, pushToast, queryClient]);
+
+  /** The 100% state is a two-second confirmation, never a permanent second progress bar. */
+  useEffect(() => {
+    if (!completedFlash) return;
+    const timer = setTimeout(() => setCompletedFlash(false), 2000);
+    return () => clearTimeout(timer);
+  }, [completedFlash]);
 
   /**
    * The bell links to `/app/projects/<folder>?generation=<id>`. The query is the source of truth
@@ -185,13 +202,14 @@ export function StudioView({ folderId }: { folderId: string }) {
   const canGenerate = Boolean(hasPrompt && model && !generating && balance >= (model?.tokenCost ?? 0));
 
   const promptLimitChars = config?.limits.planPromptMaxChars ?? 2000;
-  const renderPromptLimit = model?.maxPromptChars ?? config?.limits.finalPromptMaxChars ?? 4000;
+  const renderPromptLimit = effectivePromptLimit(model, config?.limits.finalPromptMaxChars ?? 4000);
   const compressing = generateMutation.isPending || planMutation.isPending;
 
   const videos = folderGenerations.filter((item) => item.mediaType === "VIDEO").length;
   const images = folderGenerations.filter((item) => item.mediaType === "IMAGE").length;
   const tokensUsed = folderGenerations.reduce((total, item) => total + item.tokensCharged, 0);
   const contexts = contextsQuery.data ?? [];
+  const contextIds = contexts.filter((item) => item.isActive).map((item) => item.id);
 
   function allowedAttachment(item: ReferenceFile): boolean {
     return item.kind === "VIDEO" ? allowVideo : allowImage;
@@ -218,6 +236,11 @@ export function StudioView({ folderId }: { folderId: string }) {
     setResolution("");
     setAspectRatio("");
     resetDraft();
+  }
+
+  function handleContinueChange(next: boolean): void {
+    setContinueFromPrevious(next);
+    window.localStorage.setItem(CONTINUE_SCENE_KEY, String(next));
   }
 
   function handlePlanModeChange(next: boolean): void {
@@ -270,7 +293,8 @@ export function StudioView({ folderId }: { folderId: string }) {
             resolution: effectiveResolution,
             aspectRatio: effectiveAspect,
             attachmentKeys: keys,
-            contextIds: [],
+            contextIds,
+            continueFromPrevious,
           },
           {
             onSuccess: (data) => {
@@ -322,7 +346,8 @@ export function StudioView({ folderId }: { folderId: string }) {
         planMode,
         finalPrompt: planMode ? plannedPrompt.trim() : null,
         attachmentKeys: keys,
-        contextIds: [],
+        contextIds,
+        continueFromPrevious,
         selectedParams: {
           durationSec: model.mediaType === "VIDEO" ? effectiveDuration : undefined,
           resolution: effectiveResolution,
@@ -331,6 +356,7 @@ export function StudioView({ folderId }: { folderId: string }) {
       });
 
       handledStatusRef.current = null;
+      setCompletedFlash(false);
       setActiveGenerationId(created.generation.id);
     } catch (error) {
       pushToast("error", error instanceof Error ? error.message : "Render gagal dijalankan.");
@@ -471,6 +497,9 @@ export function StudioView({ folderId }: { folderId: string }) {
           <PreContextPanel
             folderId={folderId}
             contexts={contexts}
+            generations={folderGenerations}
+            continueFromPrevious={continueFromPrevious}
+            onContinueChange={handleContinueChange}
             disabled={generating}
             allowVideoAnalysis={allowVideo}
           />
@@ -510,11 +539,15 @@ export function StudioView({ folderId }: { folderId: string }) {
             promptLimitChars={promptLimitChars}
             renderPromptLimit={renderPromptLimit}
             compressing={compressing}
+            progressPercent={generating ? (activeGeneration?.progressPercent ?? 0) : null}
+            estimateMs={activeGeneration?.estimateMs ?? null}
+            completedFlash={completedFlash}
           />
 
           <HistoryPanel
             generations={folderGenerations}
             activeJobId={activeGenerationId}
+            activeGeneration={activeGeneration}
             onOpen={setDetail}
             onDownload={handleDownload}
             onRemix={handleRemix}

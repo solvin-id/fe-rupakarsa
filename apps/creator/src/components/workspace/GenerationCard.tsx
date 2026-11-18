@@ -38,6 +38,7 @@ export function GenerationCard({
   onRemix,
   onDelete,
   active,
+  progressPercent = null,
 }: {
   generation: Generation;
   onOpen: () => void;
@@ -45,6 +46,8 @@ export function GenerationCard({
   onRemix: () => void;
   onDelete: () => void;
   active: boolean;
+  /** Estimated percentage while this row is the active render. */
+  progressPercent?: number | null;
 }) {
   const completed = generation.status === "COMPLETED";
   const failed = generation.status === "FAILED";
@@ -89,8 +92,16 @@ export function GenerationCard({
             </div>
           </GradientArt>
         ) : busy ? (
-          <div className="flex aspect-[4/3] w-full items-center justify-center rounded-xl bg-canvas-2">
+          <div className="relative flex aspect-[4/3] w-full items-center justify-center rounded-xl bg-canvas-2">
             <RefreshCw className="size-5 animate-spin text-accent" aria-hidden />
+            {progressPercent !== null ? (
+              <span
+                className="absolute bottom-1 right-1 rounded-full bg-ink/80 px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-canvas"
+                data-testid="card-progress"
+              >
+                {progressPercent}%
+              </span>
+            ) : null}
           </div>
         ) : (
           <div className="flex aspect-[4/3] w-full items-center justify-center rounded-xl bg-danger/5">

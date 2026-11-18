@@ -11,12 +11,13 @@ import {
   useUploadReferenceMutation,
 } from "@rupakarsa/shared/hooks/use-projects";
 import { formatRelative } from "@rupakarsa/shared/lib/format";
-import type { FolderContext } from "@rupakarsa/shared/lib/types";
+import type { FolderContext, Generation } from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
 import { Button, Select, TextArea, TextInput } from "@rupakarsa/shared/ui";
 
 import { AssetDropzone } from "@/components/workspace/AssetDropzone";
 import type { ReferenceFile } from "@/components/workspace/AssetDropzone";
+import { GenerationMediaPreview } from "@/components/workspace/GenerationMediaPreview";
 
 const SOURCE_LABEL: Record<FolderContext["source"], string> = {
   TEXT: "Teks",
@@ -27,6 +28,10 @@ const SOURCE_LABEL: Record<FolderContext["source"], string> = {
 export interface PreContextPanelProps {
   folderId: string;
   contexts: FolderContext[];
+  /** Folder history, so the scene chain can show the last finished scenes. */
+  generations: Generation[];
+  continueFromPrevious: boolean;
+  onContinueChange: (value: boolean) => void;
   disabled?: boolean;
   allowVideoAnalysis: boolean;
 }
@@ -38,6 +43,9 @@ export interface PreContextPanelProps {
 export function PreContextPanel({
   folderId,
   contexts,
+  generations,
+  continueFromPrevious,
+  onContinueChange,
   disabled = false,
   allowVideoAnalysis,
 }: PreContextPanelProps) {
@@ -61,6 +69,12 @@ export function PreContextPanel({
       value: item.id,
       label: `${item.modelName} · ${formatRelative(item.createdAt)}`,
     }));
+
+  // The chain always plays in scene order, whatever order the list endpoint returned.
+  const scenes = [...generations]
+    .filter((item) => item.status === "COMPLETED")
+    .sort((a, b) => a.sequence - b.sequence)
+    .slice(-5);
 
   function addText(): void {
     const text = textValue.trim();
@@ -128,6 +142,65 @@ export function PreContextPanel({
           <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-ink">Konteks tetap</h2>
         </div>
         <span className="pill">{contexts.length} entri</span>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-border bg-surface-2/40 p-3" data-testid="scene-chain">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <p className="mono-label text-[9px] text-muted">Scene chain</p>
+            <p className="mt-1 max-w-xs text-[10px] leading-relaxed text-muted">
+              Scene sebelumnya dipakai sebagai acuan visual dan gaya. Matikan untuk memulai adegan
+              baru.
+            </p>
+          </div>
+          <label className="flex shrink-0 items-center gap-1.5 rounded-full border border-border bg-white px-2.5 py-1 text-[10px] font-medium text-ink">
+            <input
+              type="checkbox"
+              checked={continueFromPrevious}
+              onChange={(event) => onContinueChange(event.target.checked)}
+              disabled={disabled}
+              className="size-3 accent-[#f04e23]"
+            />
+            Lanjutkan scene terakhir
+          </label>
+        </div>
+
+        <ul className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          {scenes.length === 0 ? (
+            <li className="w-full rounded-lg border border-dashed border-border px-3 py-3 text-center text-[10px] text-muted">
+              Belum ada scene selesai di folder ini.
+            </li>
+          ) : null}
+          {scenes.map((scene) => {
+            const url = scene.outputPurgedAt ? null : scene.outputUrl;
+            return (
+              <li key={scene.id} className="w-28 shrink-0">
+                <div className="relative aspect-[4/3] w-full overflow-hidden rounded-lg bg-canvas-2">
+                  {url ? (
+                    <GenerationMediaPreview
+                      url={url}
+                      mediaType={scene.mediaType}
+                      mime={scene.outputMime}
+                      label={`Scene ${scene.sequence}`}
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <span className="flex size-full items-center justify-center text-[9px] text-muted">
+                      Tanpa hasil
+                    </span>
+                  )}
+                  <span className="absolute left-1 top-1 rounded-full bg-ink/80 px-1.5 py-0.5 font-mono text-[9px] text-canvas">
+                    #{scene.sequence}
+                  </span>
+                </div>
+                <p className="mt-1 line-clamp-2 text-[9px] leading-tight text-muted">
+                  {scene.plannedPrompt.slice(0, 80)}
+                </p>
+                <p className="text-[8px] text-muted/70">{formatRelative(scene.completedAt)}</p>
+              </li>
+            );
+          })}
+        </ul>
       </div>
 
       <div className="mt-4 rounded-xl border border-border bg-surface-2/40 p-3">

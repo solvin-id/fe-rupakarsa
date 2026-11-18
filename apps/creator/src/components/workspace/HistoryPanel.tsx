@@ -8,6 +8,7 @@ import type { Generation } from "@rupakarsa/shared/lib/types";
 export function HistoryPanel({
   generations,
   activeJobId,
+  activeGeneration,
   onOpen,
   onDownload,
   onRemix,
@@ -15,6 +16,8 @@ export function HistoryPanel({
 }: {
   generations: Generation[];
   activeJobId: string | null;
+  /** The polled row of the running render, so its card can show the estimated percentage. */
+  activeGeneration: Generation | null;
   onOpen: (generation: Generation) => void;
   onDownload: (generation: Generation) => void;
   onRemix: (generation: Generation) => void;
@@ -49,6 +52,9 @@ export function HistoryPanel({
               key={generation.id}
               generation={generation}
               active={generation.id === activeJobId}
+              progressPercent={
+                generation.id === activeJobId ? (activeGeneration?.progressPercent ?? null) : null
+              }
               onOpen={() => onOpen(generation)}
               onDownload={() => onDownload(generation)}
               onRemix={() => onRemix(generation)}

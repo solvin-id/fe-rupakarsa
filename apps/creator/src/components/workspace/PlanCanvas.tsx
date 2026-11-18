@@ -12,7 +12,12 @@ import {
 
 import { Button } from "@rupakarsa/shared/ui";
 import { TextArea } from "@rupakarsa/shared/ui";
-import { formatRupiahFromTokens, formatTokens } from "@rupakarsa/shared/lib/format";
+import {
+  formatDurationMs,
+  formatRupiahFromTokens,
+  formatTokens,
+} from "@rupakarsa/shared/lib/format";
+import { truncateToLimit } from "@rupakarsa/shared/lib/prompt";
 import type { PlanCost } from "@rupakarsa/shared/lib/tokens";
 import type { AiModel, GenerationStatus, MediaCapability } from "@rupakarsa/shared/lib/types";
 
@@ -52,6 +57,12 @@ export interface PlanCanvasProps {
   renderPromptLimit: number;
   /** A generate request is compressing the prompt right now. */
   compressing: boolean;
+  /** Estimated percentage of the active render; null when nothing is running. */
+  progressPercent: number | null;
+  /** Historical average render time the percentage is derived from. */
+  estimateMs: number | null;
+  /** True for two seconds after a render completes, so the bar lands on 100. */
+  completedFlash: boolean;
 }
 
 const STATUS_LABEL: Record<GenerationStatus, string> = {
@@ -94,6 +105,9 @@ export function PlanCanvas({
   promptLimitChars,
   renderPromptLimit,
   compressing,
+  progressPercent,
+  estimateMs,
+  completedFlash,
 }: PlanCanvasProps) {
   const cost = model?.tokenCost ?? 0;
   const projected = Math.max(0, balance - cost);
@@ -220,20 +234,35 @@ export function PlanCanvas({
           <div className="mt-4 rounded-2xl border border-accent-2/20 bg-accent-2-soft/40 p-4">
             <div className="flex items-center justify-between gap-2">
               <p className="mono-label text-[9px] text-accent-2">Plan blueprint</p>
-              <span className="flex items-center gap-1 text-[10px] text-success">
-                <Check className="size-3" aria-hidden />
-                Bisa diedit
+              <span
+                className={`font-mono text-[10px] tabular-nums ${
+                  plannedPrompt.length > renderPromptLimit ? "text-danger" : "text-success"
+                }`}
+                data-testid="plan-prompt-limit"
+              >
+                {plannedPrompt.length}/{formatTokens(renderPromptLimit)}
               </span>
             </div>
             {plannedPrompt.length > renderPromptLimit ? (
               <div className="mt-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-[11px] leading-relaxed text-ink">
-                Plan {plannedPrompt.length} karakter, batas model {renderPromptLimit}; prompt akan
-                dimampatkan otomatis saat generate.
+                <p>
+                  Plan {plannedPrompt.length} karakter, batas model {renderPromptLimit}; prompt akan
+                  dimampatkan otomatis saat generate.
+                </p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="mt-2"
+                  onClick={() => onPlannedPromptChange(truncateToLimit(plannedPrompt, renderPromptLimit))}
+                >
+                  Pangkas ke batas
+                </Button>
               </div>
             ) : null}
             <TextArea
               aria-label="Plan blueprint"
               rows={8}
+              maxLength={Math.max(renderPromptLimit, plannedPrompt.length)}
               value={plannedPrompt}
               onChange={(event) => onPlannedPromptChange(event.target.value)}
               className="mt-2 min-h-40 border-accent-2/20 bg-white/80 font-mono text-[11px] leading-relaxed"
@@ -334,16 +363,45 @@ export function PlanCanvas({
 
           {generating ? (
             <div className="mt-4 rounded-xl border border-accent/25 bg-accent/10 px-3 py-2.5">
-              <div className="flex items-center gap-2 text-xs text-accent">
-                <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                {compressing
-                  ? "Memampatkan prompt…"
-                  : activeStatus
-                    ? STATUS_LABEL[activeStatus]
-                    : "Mengirim job…"}
+              <div className="flex items-center justify-between gap-2 text-xs text-accent">
+                <span className="flex items-center gap-2">
+                  <Loader2 className="size-3.5 animate-spin" aria-hidden />
+                  {compressing
+                    ? "Memampatkan prompt…"
+                    : activeStatus
+                      ? STATUS_LABEL[activeStatus]
+                      : "Mengirim job…"}
+                </span>
+                <span className="font-mono tabular-nums text-canvas" data-testid="render-percent">
+                  {progressPercent ?? 0}%
+                </span>
               </div>
               <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
-                <div className="h-full w-2/3 animate-pulse rounded-full bg-accent" />
+                <div
+                  className="h-full rounded-full bg-accent transition-[width] duration-700 ease-linear"
+                  style={{ width: `${progressPercent ?? 0}%` }}
+                />
+              </div>
+              <p className="mt-1.5 text-[10px] text-canvas/60">
+                {activeStatus === "QUEUED"
+                  ? "0% — menunggu worker"
+                  : `≈ ${formatDurationMs(estimateMs)} (rata-rata render sebelumnya)`}
+              </p>
+            </div>
+          ) : completedFlash ? (
+            <div
+              className="mt-4 rounded-xl border border-success/30 bg-success/10 px-3 py-2.5"
+              data-testid="render-completed"
+            >
+              <div className="flex items-center justify-between gap-2 text-xs text-success">
+                <span className="flex items-center gap-2">
+                  <Check className="size-3.5" aria-hidden />
+                  Render selesai
+                </span>
+                <span className="font-mono tabular-nums">100%</span>
+              </div>
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full w-full rounded-full bg-success" />
               </div>
             </div>
           ) : null}
