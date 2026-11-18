@@ -292,7 +292,8 @@ export interface Pricing {
   planModeTokenCost: number;
 }
 
-export interface PlanModelConfig {
+/** A wired AI model, as the studio needs it to decide which inputs are accepted. */
+export interface PublicModelRef {
   id: string;
   name: string;
   inputCapabilities: MediaCapability[];
@@ -302,7 +303,12 @@ export interface PublicConfig {
   contact: AdminContact;
   pricing: Pricing;
   features: { simulation: boolean };
-  planModel: PlanModelConfig | null;
+  planModel: PublicModelRef | null;
+  /**
+   * Analysis models are their own capability gate: attachment analysis and project-context media
+   * never touch the plan model.
+   */
+  analysisModels: { image: PublicModelRef | null; video: PublicModelRef | null };
   defaults: { videoModelId: string | null };
   limits: { planPromptMaxChars: number; finalPromptMaxChars: number };
 }

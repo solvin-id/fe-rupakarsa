@@ -129,6 +129,71 @@
               "inputCapabilities"
             ]
           },
+          "analysisModels": {
+            "type": "object",
+            "properties": {
+              "image": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "inputCapabilities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "TEXT",
+                        "IMAGE",
+                        "VIDEO"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "inputCapabilities"
+                ]
+              },
+              "video": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "inputCapabilities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "TEXT",
+                        "IMAGE",
+                        "VIDEO"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "inputCapabilities"
+                ]
+              }
+            },
+            "required": [
+              "image",
+              "video"
+            ]
+          },
           "defaults": {
             "type": "object",
             "properties": {
@@ -162,6 +227,7 @@
           "pricing",
           "features",
           "planModel",
+          "analysisModels",
           "defaults",
           "limits"
         ]

@@ -4630,6 +4630,18 @@ export interface components {
                 name: string;
                 inputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
             } | null;
+            analysisModels: {
+                image: {
+                    id: string;
+                    name: string;
+                    inputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
+                } | null;
+                video: {
+                    id: string;
+                    name: string;
+                    inputCapabilities: ("TEXT" | "IMAGE" | "VIDEO")[];
+                } | null;
+            };
             defaults: {
                 videoModelId: string | null;
             };
