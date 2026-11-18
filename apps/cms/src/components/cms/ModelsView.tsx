@@ -4,6 +4,7 @@ import { Film, Image as ImageIcon, Pencil, Plus, Settings2, Sparkles } from "luc
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  useAdminCharactersQuery,
   useAdminModelsFilteredQuery,
   useAdminModelTemplatesQuery,
   useAdminProvidersQuery,
@@ -37,14 +38,20 @@ function parseStrings(value: string): string[] {
     .filter(Boolean);
 }
 
-/** Blank keeps the workspace default (null); an unusable value is reported as `undefined`. */
+/**
+ * Blank keeps the workspace default (null). Zero is rejected by the API and means "unset" on old
+ * rows, so it is reported as an unusable value here instead of silently compressing prompts to "".
+ */
 function parsePromptLimit(value: string): number | null | undefined {
   const trimmed = value.trim();
   if (trimmed.length === 0) return null;
   const parsed = Number(trimmed);
-  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 32000) return undefined;
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 32000) return undefined;
   return parsed;
 }
+
+/** Only SOUL models take a trained character as `custom_reference_id`. */
+const SOUL_MODEL_CODES = ["soul-v2", "soul-standard"];
 
 function toggleCapability(
   list: MediaCapability[],
@@ -115,6 +122,7 @@ function CapabilityPicker({
 export function ModelsView() {
   const allModelsQuery = useAdminModelsFilteredQuery({});
   const providersQuery = useAdminProvidersQuery();
+  const charactersQuery = useAdminCharactersQuery();
   const createModel = useCreateModelMutation();
   const updateModel = useUpdateModelMutation();
   const updateModelFull = updateModel;
@@ -154,6 +162,8 @@ export function ModelsView() {
   const [draftAspectRatios, setDraftAspectRatios] = useState("");
   const [draftInputCaps, setDraftInputCaps] = useState<MediaCapability[]>(["TEXT"]);
   const [draftOutputCaps, setDraftOutputCaps] = useState<MediaCapability[]>(["VIDEO"]);
+  const [draftThinking, setDraftThinking] = useState(false);
+  const [draftReference, setDraftReference] = useState("");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [draftProviderId, setDraftProviderId] = useState("");
@@ -168,11 +178,16 @@ export function ModelsView() {
   const [draftNewAspectRatios, setDraftNewAspectRatios] = useState("");
   const [draftNewInputCaps, setDraftNewInputCaps] = useState<MediaCapability[]>(["TEXT"]);
   const [draftNewOutputCaps, setDraftNewOutputCaps] = useState<MediaCapability[]>(["VIDEO"]);
+  const [draftNewThinking, setDraftNewThinking] = useState(false);
+  const [draftNewReference, setDraftNewReference] = useState("");
   const [draftActive, setDraftActive] = useState(true);
 
   const models = modelsQuery.data ?? [];
   const allModels = allModelsQuery.data ?? [];
   const providers = providersQuery.data ?? [];
+  const completedCharacters = (charactersQuery.data ?? []).filter(
+    (character) => character.status === "COMPLETED" && character.externalId !== null,
+  );
   const selectedProvider = providers.find((provider) => provider.id === draftProviderId) ?? null;
   const templatesQuery = useAdminModelTemplatesQuery(selectedProvider?.code ?? "");
   const templates = templatesQuery.data ?? [];
@@ -195,6 +210,8 @@ export function ModelsView() {
     setDraftAspectRatios(model.allowedParams.aspectRatios.join(", "));
     setDraftInputCaps([...model.inputCapabilities]);
     setDraftOutputCaps([...model.outputCapabilities]);
+    setDraftThinking(model.thinkingEnabled);
+    setDraftReference(model.customReferenceId ?? "");
   }
 
   function handleSave(): void {
@@ -221,7 +238,7 @@ export function ModelsView() {
     }
     const maxPromptChars = parsePromptLimit(draftMaxPrompt);
     if (maxPromptChars === undefined) {
-      pushToast("error", "Batas karakter prompt harus 0–32000 atau dikosongkan.");
+      pushToast("error", "Batas karakter prompt harus 1–32000 atau dikosongkan.");
       return;
     }
     updateModelFull.mutate(
@@ -237,6 +254,8 @@ export function ModelsView() {
         },
         inputCapabilities: draftInputCaps,
         outputCapabilities: draftOutputCaps,
+        thinkingEnabled: draftThinking,
+        customReferenceId: draftReference.length > 0 ? draftReference : null,
       },
       {
         onSuccess: () => {
@@ -344,7 +363,7 @@ export function ModelsView() {
     }
     const maxPromptChars = parsePromptLimit(draftNewMaxPrompt);
     if (maxPromptChars === undefined) {
-      pushToast("error", "Batas karakter prompt harus 0–32000 atau dikosongkan.");
+      pushToast("error", "Batas karakter prompt harus 1–32000 atau dikosongkan.");
       return;
     }
 
@@ -359,6 +378,8 @@ export function ModelsView() {
         allowedParams: { durations, resolutions, aspectRatios },
         tokenCost: Math.round(cost),
         maxPromptChars,
+        thinkingEnabled: draftNewThinking,
+        customReferenceId: draftNewReference.length > 0 ? draftNewReference : null,
         isActive: draftActive,
       },
       {
@@ -616,13 +637,44 @@ export function ModelsView() {
             <TextInput
               id="model-max-prompt"
               type="number"
-              min={0}
+              min={1}
               max={32000}
               value={draftMaxPrompt}
               onChange={(event) => setDraftMaxPrompt(event.target.value)}
               placeholder="Default"
             />
           </Field>
+          {editing && providerName(editing.providerId) === "Higgsfield" ? (
+            <label className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/40 px-3 py-2 text-[11px] text-ink">
+              <input
+                type="checkbox"
+                checked={draftThinking}
+                onChange={(event) => setDraftThinking(event.target.checked)}
+                className="size-3.5 accent-[#f04e23]"
+              />
+              Deep thinking (Wan 3.0)
+            </label>
+          ) : null}
+          {editing && SOUL_MODEL_CODES.includes(editing.code) ? (
+            <Field
+              label="Soul ID reference"
+              htmlFor="model-soul-reference"
+              hint="Pilih karakter yang sudah selesai dilatih di Providers."
+            >
+              <Select
+                id="model-soul-reference"
+                value={draftReference}
+                onChange={setDraftReference}
+                options={[
+                  { value: "", label: "Tanpa referensi" },
+                  ...completedCharacters.map((character) => ({
+                    value: character.externalId ?? "",
+                    label: `${character.name} · ${character.modelVersion}`,
+                  })),
+                ]}
+              />
+            </Field>
+          ) : null}
           {editing?.mediaType === "VIDEO" ? (
             <Field
               label="Durasi (detik)"
@@ -786,13 +838,45 @@ export function ModelsView() {
             <TextInput
               id="model-new-max-prompt"
               type="number"
-              min={0}
+              min={1}
               max={32000}
               value={draftNewMaxPrompt}
               onChange={(event) => setDraftNewMaxPrompt(event.target.value)}
               placeholder="Default"
             />
           </Field>
+
+          {selectedProvider?.code === "HIGGSFIELD" ? (
+            <label className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/40 px-3 py-2 text-[11px] text-ink">
+              <input
+                type="checkbox"
+                checked={draftNewThinking}
+                onChange={(event) => setDraftNewThinking(event.target.checked)}
+                className="size-3.5 accent-[#f04e23]"
+              />
+              Deep thinking (Wan 3.0)
+            </label>
+          ) : null}
+          {SOUL_MODEL_CODES.includes(draftCode) ? (
+            <Field
+              label="Soul ID reference"
+              htmlFor="model-new-soul-reference"
+              hint="Pilih karakter yang sudah selesai dilatih di Providers."
+            >
+              <Select
+                id="model-new-soul-reference"
+                value={draftNewReference}
+                onChange={setDraftNewReference}
+                options={[
+                  { value: "", label: "Tanpa referensi" },
+                  ...completedCharacters.map((character) => ({
+                    value: character.externalId ?? "",
+                    label: `${character.name} · ${character.modelVersion}`,
+                  })),
+                ]}
+              />
+            </Field>
+          ) : null}
 
           {draftMediaType === "VIDEO" ? (
             <Field

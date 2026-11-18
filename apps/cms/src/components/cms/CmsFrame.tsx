@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   Building2,
   ChevronRight,
   HardDrive,
@@ -36,6 +37,7 @@ const NAV = [
   { href: "/users", label: "Users & akses", icon: Users },
   { href: "/providers", label: "Providers", icon: KeyRound },
   { href: "/models", label: "Models & tarif", icon: Settings2 },
+  { href: "/ai-activity", label: "AI activity", icon: Activity },
   { href: "/storage", label: "Storage", icon: HardDrive },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
