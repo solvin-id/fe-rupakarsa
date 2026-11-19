@@ -12,6 +12,7 @@ export const queryKeys = {
   activeGenerations: ["generations", "active"] as const,
   contexts: (folderId: string) => ["contexts", folderId] as const,
   models: ["models"] as const,
+  characters: ["characters"] as const,
   drive: (workspaceId: string) => ["drive", workspaceId] as const,
   storage: ["storage"] as const,
   storageList: (filters: StorageFilters) => ["storage", filters] as const,

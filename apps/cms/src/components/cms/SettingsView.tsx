@@ -523,6 +523,9 @@ function LimitsSettingsForm({ settings }: { settings: LimitsSettings }) {
   const [finalPromptMaxChars, setFinalPromptMaxChars] = useState(
     String(settings.finalPromptMaxChars),
   );
+  const [maxSceneChainScenes, setMaxSceneChainScenes] = useState(
+    String(settings.maxSceneChainScenes),
+  );
 
   function handleSave(): void {
     const values: LimitsSettings = {
@@ -530,6 +533,7 @@ function LimitsSettingsForm({ settings }: { settings: LimitsSettings }) {
       planRequestsPerHourPerUser: Number(planPerHour),
       planPromptMaxChars: Number(planPromptMaxChars),
       finalPromptMaxChars: Number(finalPromptMaxChars),
+      maxSceneChainScenes: Number(maxSceneChainScenes),
     };
 
     const invalid = (value: number, min: number, max: number): boolean =>
@@ -549,6 +553,10 @@ function LimitsSettingsForm({ settings }: { settings: LimitsSettings }) {
     }
     if (invalid(values.finalPromptMaxChars, 200, 32000)) {
       pushToast("error", "Batas prompt final harus 200–32000 karakter.");
+      return;
+    }
+    if (invalid(values.maxSceneChainScenes, 1, 10)) {
+      pushToast("error", "Scene chain maksimum harus 1–10.");
       return;
     }
 
@@ -625,6 +633,20 @@ function LimitsSettingsForm({ settings }: { settings: LimitsSettings }) {
             max={32000}
             value={finalPromptMaxChars}
             onChange={(event) => setFinalPromptMaxChars(event.target.value)}
+          />
+        </Field>
+        <Field
+          label="Scene chain maksimum"
+          htmlFor="limits-scene-chain"
+          hint="Jumlah scene selesai yang boleh dipilih untuk continuity. 1–10."
+        >
+          <TextInput
+            id="limits-scene-chain"
+            type="number"
+            min={1}
+            max={10}
+            value={maxSceneChainScenes}
+            onChange={(event) => setMaxSceneChainScenes(event.target.value)}
           />
         </Field>
       </div>

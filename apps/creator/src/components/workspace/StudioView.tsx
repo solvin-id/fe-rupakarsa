@@ -46,16 +46,21 @@ const STATUS_LABEL: Record<GenerationStatus, string> = {
 };
 
 const PLAN_MODE_KEY = "rupakarsa.planMode";
-const CONTINUE_SCENE_KEY = "rupakarsa.continueScene";
 
 function readPlanMode(): boolean {
   if (typeof window === "undefined") return true;
   return window.localStorage.getItem(PLAN_MODE_KEY) !== "false";
 }
 
-function readContinueScene(): boolean {
-  if (typeof window === "undefined") return true;
-  return window.localStorage.getItem(CONTINUE_SCENE_KEY) !== "false";
+/** Selection is a user decision, so a corrupt value degrades to "no chain" instead of a crash. */
+function readSceneChain(key: string): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(key) ?? "[]");
+    return Array.isArray(parsed) && parsed.every((id) => typeof id === "string") ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 export function StudioView({ folderId }: { folderId: string }) {
@@ -87,7 +92,8 @@ export function StudioView({ folderId }: { folderId: string }) {
   const [negativePrompt, setNegativePrompt] = useState("");
   const [planReady, setPlanReady] = useState(false);
   const [planMode, setPlanMode] = useState<boolean>(readPlanMode);
-  const [continueFromPrevious, setContinueFromPrevious] = useState<boolean>(readContinueScene);
+  const sceneChainKey = `rupakarsa.sceneChain.${folderId}`;
+  const [chainSceneIds, setChainSceneIds] = useState<string[]>(() => readSceneChain(sceneChainKey));
   const [attachments, setAttachments] = useState<ReferenceFile[]>([]);
   const [analysisText, setAnalysisText] = useState("");
   const [simulateFailure, setSimulateFailure] = useState(false);
@@ -136,6 +142,23 @@ export function StudioView({ folderId }: { folderId: string }) {
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
   }, [generationsQuery.data]);
+
+  // A deleted or unfinished scene must not keep feeding continuity. While the history is still
+  // loading the stored selection is trusted; once it loads, only completed ids survive.
+  const completedSceneIds = useMemo(
+    () =>
+      new Set(
+        folderGenerations.filter((row) => row.status === "COMPLETED").map((row) => row.id),
+      ),
+    [folderGenerations],
+  );
+  const activeChainSceneIds = useMemo(
+    () =>
+      generationsQuery.isSuccess
+        ? chainSceneIds.filter((id) => completedSceneIds.has(id))
+        : chainSceneIds,
+    [chainSceneIds, completedSceneIds, generationsQuery.isSuccess],
+  );
 
   const activeGenerationQuery = useGenerationQuery(activeGenerationId, {
     refetchInterval: activeGenerationId ? 1500 : false,
@@ -243,9 +266,9 @@ export function StudioView({ folderId }: { folderId: string }) {
     resetDraft();
   }
 
-  function handleContinueChange(next: boolean): void {
-    setContinueFromPrevious(next);
-    window.localStorage.setItem(CONTINUE_SCENE_KEY, String(next));
+  function handleChainChange(next: string[]): void {
+    setChainSceneIds(next);
+    window.localStorage.setItem(sceneChainKey, JSON.stringify(next));
   }
 
   function handlePlanModeChange(next: boolean): void {
@@ -299,7 +322,7 @@ export function StudioView({ folderId }: { folderId: string }) {
             aspectRatio: effectiveAspect,
             attachmentKeys: keys,
             contextIds,
-            continueFromPrevious,
+            chainSceneIds: activeChainSceneIds,
           },
           {
             onSuccess: (data) => {
@@ -352,7 +375,7 @@ export function StudioView({ folderId }: { folderId: string }) {
         finalPrompt: planMode ? plannedPrompt.trim() : null,
         attachmentKeys: keys,
         contextIds,
-        continueFromPrevious,
+        chainSceneIds: activeChainSceneIds,
         selectedParams: {
           durationSec: model.mediaType === "VIDEO" ? effectiveDuration : undefined,
           resolution: effectiveResolution,
@@ -506,8 +529,11 @@ export function StudioView({ folderId }: { folderId: string }) {
             folderId={folderId}
             contexts={contexts}
             generations={folderGenerations}
-            continueFromPrevious={continueFromPrevious}
-            onContinueChange={handleContinueChange}
+            chainSceneIds={activeChainSceneIds}
+            onChainChange={handleChainChange}
+            maxChainScenes={config?.limits.maxSceneChainScenes ?? 2}
+            characterReferenceId={folder?.characterReferenceId ?? null}
+            canManageCharacters={(session?.activeWorkspaceRole ?? "MEMBER") !== "MEMBER"}
             disabled={generating}
             allowImageAnalysis={allowImageAnalysis}
             allowVideoAnalysis={allowVideoAnalysis}

@@ -109,6 +109,8 @@ export interface Folder {
   userId: string | null;
   name: string;
   description: string;
+  /** Soul ID selected for this project; null keeps the render model's default. */
+  characterReferenceId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -310,7 +312,7 @@ export interface PublicConfig {
    */
   analysisModels: { image: PublicModelRef | null; video: PublicModelRef | null };
   defaults: { videoModelId: string | null };
-  limits: { planPromptMaxChars: number; finalPromptMaxChars: number };
+  limits: { planPromptMaxChars: number; finalPromptMaxChars: number; maxSceneChainScenes: number };
 }
 
 /** Quota and prompt ceilings editable from the CMS. */
@@ -319,6 +321,7 @@ export interface LimitsSettings {
   planRequestsPerHourPerUser: number;
   planPromptMaxChars: number;
   finalPromptMaxChars: number;
+  maxSceneChainScenes: number;
 }
 
 export interface PlanResponse {

@@ -164,6 +164,49 @@ export function useDeleteFolderContextMutation(folderId: string) {
   });
 }
 
+export function useWorkspaceCharactersQuery() {
+  return useQuery({
+    queryKey: queryKeys.characters,
+    queryFn: creatorApi.characters,
+    staleTime: 30_000,
+  });
+}
+
+export function useTrainCharacterMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      name: string;
+      modelVersion: "v1" | "v2" | "cinema";
+      imageAssetIds: string[];
+    }) => creatorApi.trainCharacter(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.characters });
+    },
+  });
+}
+
+export function useRefreshCharacterMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (characterId: string) => creatorApi.refreshCharacter(characterId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.characters });
+    },
+  });
+}
+
+export function useUpdateFolderCharacterMutation(folderId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (characterReferenceId: string | null) =>
+      creatorApi.updateFolder(folderId, { characterReferenceId }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.folders });
+    },
+  });
+}
+
 export function useAnalyzeAssetMutation() {
   return useMutation({
     mutationFn: (input: { mediaAssetId?: string; generationId?: string; refresh?: boolean }) =>

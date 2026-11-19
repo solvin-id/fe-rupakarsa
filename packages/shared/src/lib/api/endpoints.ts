@@ -63,7 +63,7 @@ export interface PlanGenerationInput {
   aspectRatio: string;
   attachmentKeys: string[];
   contextIds: string[];
-  continueFromPrevious: boolean;
+  chainSceneIds: string[];
 }
 
 export interface CreateGenerationInput {
@@ -75,7 +75,7 @@ export interface CreateGenerationInput {
   attachmentKeys: string[];
   contextIds: string[];
   selectedParams: GenerationParams;
-  continueFromPrevious: boolean;
+  chainSceneIds: string[];
 }
 
 export type AccountWorkspaceMode = "PERSONAL" | "EXISTING";
@@ -276,7 +276,7 @@ export const creatorApi = {
   folders: () => apiRequest<FolderWithStats[]>("/api/creator/folders"),
   createFolder: (input: { name: string; description?: string }) =>
     apiRequest<Folder>("/api/creator/folders", { method: "POST", body: input }),
-  updateFolder: (folderId: string, input: { name?: string; description?: string }) =>
+  updateFolder: (folderId: string, input: { name?: string; description?: string; characterReferenceId?: string | null }) =>
     apiRequest<Folder>(`/api/creator/folders/${folderId}`, { method: "PATCH", body: input }),
   deleteFolder: (folderId: string) =>
     apiRequest<void>(`/api/creator/folders/${folderId}`, { method: "DELETE" }),
@@ -315,6 +315,17 @@ export const creatorApi = {
   deleteGeneration: (generationId: string) =>
     apiRequest<void>(`/api/creator/generations/${generationId}`, { method: "DELETE" }),
   uploadReference: (file: File) => apiUpload<UploadedAsset>("/api/creator/uploads", file),
+
+  characters: () => apiRequest<AiCharacterReference[]>("/api/creator/characters"),
+  trainCharacter: (input: {
+    name: string;
+    modelVersion: "v1" | "v2" | "cinema";
+    imageAssetIds: string[];
+  }) => apiRequest<AiCharacterReference>("/api/creator/characters", { method: "POST", body: input }),
+  refreshCharacter: (characterId: string) =>
+    apiRequest<AiCharacterReference>(`/api/creator/characters/${characterId}/refresh`, {
+      method: "POST",
+    }),
 
   storage: (filters: StorageFilters) =>
     apiRequest<StorageList>(`/api/creator/storage${storageQuery(filters)}`),
