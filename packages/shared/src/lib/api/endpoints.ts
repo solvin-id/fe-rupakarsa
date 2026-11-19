@@ -450,19 +450,6 @@ export const cmsApi = {
     apiRequest<AiActivityPage>(`/api/cms/ai-activity${aiActivityQuery(filters)}`),
 
   characters: () => apiRequest<AiCharacterReference[]>("/api/cms/higgsfield/characters"),
-  createCharacter: (input: {
-    name: string;
-    modelVersion: "v1" | "v2" | "cinema";
-    imageUrls: string[];
-  }) =>
-    apiRequest<AiCharacterReference>("/api/cms/higgsfield/characters", {
-      method: "POST",
-      body: input,
-    }),
-  refreshCharacter: (characterId: string) =>
-    apiRequest<AiCharacterReference>(`/api/cms/higgsfield/characters/${characterId}/refresh`, {
-      method: "POST",
-    }),
 
   auditLogs: (before?: string) =>
     apiRequest<AuditLog[]>(

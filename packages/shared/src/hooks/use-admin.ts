@@ -15,7 +15,6 @@ import { queryKeys } from "../lib/api/keys";
 import type {
   AdminContact,
   AiActivityFilters,
-  AiCharacterReference,
   LimitsSettings,
   Workspace,
 } from "../lib/types";
@@ -224,32 +223,6 @@ export function useUpdateContactMutation() {
 
 export function useAdminCharactersQuery() {
   return useQuery({ queryKey: queryKeys.admin.characters, queryFn: cmsApi.characters });
-}
-
-export function useCreateCharacterMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { name: string; modelVersion: "v1" | "v2" | "cinema"; imageUrls: string[] }) =>
-      cmsApi.createCharacter(input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.characters });
-    },
-  });
-}
-
-export function useRefreshCharacterMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (characterId: string) => cmsApi.refreshCharacter(characterId),
-    onSuccess: (row: AiCharacterReference) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.characters });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.models });
-      void queryClient.setQueryData<AiCharacterReference[]>(
-        queryKeys.admin.characters,
-        (current) => current?.map((item) => (item.id === row.id ? row : item)) ?? [row],
-      );
-    },
-  });
 }
 
 export function useAiActivityQuery(filters: AiActivityFilters) {

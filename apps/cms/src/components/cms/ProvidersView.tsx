@@ -14,217 +14,22 @@ import {
 import { useState } from "react";
 
 import {
-  useAdminCharactersQuery,
   useAdminProvidersQuery,
-  useCreateCharacterMutation,
   useCreateProviderMutation,
   useDeleteProviderMutation,
-  useRefreshCharacterMutation,
   useSyncProviderModelsMutation,
   useTestProviderMutation,
   useUpdateProviderMutation,
 } from "@rupakarsa/shared/hooks/use-admin";
 import { formatDateTime } from "@rupakarsa/shared/lib/format";
-import type { AiCharacterReference, AiProvider } from "@rupakarsa/shared/lib/types";
+import type { AiProvider } from "@rupakarsa/shared/lib/types";
 import { useUiStore } from "@rupakarsa/shared/stores/ui-store";
-import { Button, Dialog, Field, Select, TextArea, TextInput } from "@rupakarsa/shared/ui";
+import { Button, Dialog, Field, Select, TextInput } from "@rupakarsa/shared/ui";
 
 const KIND_LABELS: Record<AiProvider["kind"], string> = {
   HIGGSFIELD: "Higgsfield",
   OPENAI_COMPATIBLE: "OpenAI-compatible",
 };
-
-const CHARACTER_STATUS_STYLES: Record<AiCharacterReference["status"], string> = {
-  NOT_READY: "bg-canvas-2 text-ink/70",
-  QUEUED: "bg-warning/10 text-warning",
-  IN_PROGRESS: "bg-accent/10 text-accent-strong",
-  COMPLETED: "bg-success/10 text-success",
-  FAILED: "bg-danger/10 text-danger",
-};
-
-/**
- * Soul ID training for Higgsfield: one reusable character per set of 1–100 public images, polled
- * until the provider completes it, then selectable on a SOUL model in Models & tarif.
- */
-function SoulIdTuningCard() {
-  const pushToast = useUiStore((state) => state.pushToast);
-  const charactersQuery = useAdminCharactersQuery();
-  const createCharacter = useCreateCharacterMutation();
-  const refreshCharacter = useRefreshCharacterMutation();
-
-  const [name, setName] = useState("");
-  const [modelVersion, setModelVersion] = useState<"v1" | "v2" | "cinema">("v1");
-  const [urls, setUrls] = useState("");
-
-  const characters = charactersQuery.data ?? [];
-
-  function handleCreate(): void {
-    const imageUrls = urls
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
-
-    if (name.trim().length === 0) {
-      pushToast("error", "Nama karakter wajib diisi.");
-      return;
-    }
-    if (imageUrls.length < 1 || imageUrls.length > 100) {
-      pushToast("error", "Latih karakter dari 1–100 URL gambar.");
-      return;
-    }
-    const invalid = imageUrls.find((url) => !/^https?:\/\//.test(url));
-    if (invalid) {
-      pushToast("error", `URL tidak valid: ${invalid}`);
-      return;
-    }
-
-    createCharacter.mutate(
-      { name: name.trim(), modelVersion, imageUrls },
-      {
-        onSuccess: () => {
-          setName("");
-          setUrls("");
-          pushToast("success", "Training Soul ID dikirim. Cek status berkala.");
-        },
-        onError: (error) => pushToast("error", error.message),
-      },
-    );
-  }
-
-  function copyId(value: string): void {
-    void navigator.clipboard.writeText(value).then(
-      () => pushToast("success", "External id disalin."),
-      () => pushToast("error", "Gagal menyalin."),
-    );
-  }
-
-  return (
-    <article className="card p-5 lg:col-span-2">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="mono-label text-muted">Higgsfield</p>
-          <h2 className="mt-1 text-base font-semibold tracking-[-0.02em] text-ink">
-            Soul ID tuning
-          </h2>
-          <p className="mt-1 max-w-2xl text-[11px] leading-relaxed text-muted">
-            Latih karakter dari 1–100 foto. Setelah selesai, pilih referensi ini di Models &amp;
-            tarif untuk model SOUL.
-          </p>
-        </div>
-        <ShieldCheck className="size-4 text-accent-strong" aria-hidden />
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,0.7fr)_minmax(0,0.3fr)]">
-        <Field label="Nama karakter" htmlFor="soul-name">
-          <TextInput
-            id="soul-name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Contoh: Mbok Srini"
-          />
-        </Field>
-        <Field label="Versi model" htmlFor="soul-version">
-          <Select
-            id="soul-version"
-            value={modelVersion}
-            onChange={(value) => setModelVersion(value as "v1" | "v2" | "cinema")}
-            options={[
-              { value: "v1", label: "v1" },
-              { value: "v2", label: "v2" },
-              { value: "cinema", label: "cinema" },
-            ]}
-          />
-        </Field>
-      </div>
-
-      <Field
-        label="URL gambar (satu per baris)"
-        htmlFor="soul-urls"
-        hint="Gambar harus dapat diakses publik oleh Higgsfield."
-      >
-        <TextArea
-          id="soul-urls"
-          rows={3}
-          value={urls}
-          onChange={(event) => setUrls(event.target.value)}
-          placeholder={"https://cdn.contoh.id/foto-1.jpg\nhttps://cdn.contoh.id/foto-2.jpg"}
-          className="min-h-20 font-mono text-[11px]"
-        />
-      </Field>
-
-      <div className="mt-2 flex justify-end">
-        <Button variant="primary" size="sm" loading={createCharacter.isPending} onClick={handleCreate}>
-          Latih Soul ID
-        </Button>
-      </div>
-
-      <ul className="mt-4 flex flex-col gap-2">
-        {characters.length === 0 ? (
-          <li className="rounded-xl border border-dashed border-border px-3 py-4 text-center text-[11px] text-muted">
-            Belum ada referensi karakter.
-          </li>
-        ) : null}
-        {characters.map((character) => (
-          <li
-            key={character.id}
-            className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-2/40 px-3 py-2.5"
-          >
-            {character.thumbnailUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={character.thumbnailUrl}
-                alt={character.name}
-                className="size-10 rounded-lg object-cover"
-              />
-            ) : (
-              <span className="flex size-10 items-center justify-center rounded-lg bg-canvas-2 text-[9px] text-muted">
-                ID
-              </span>
-            )}
-            <div className="min-w-0 flex-1">
-              <p className="flex items-center gap-2 text-[11px] font-medium text-ink">
-                {character.name}
-                <span className="mono-label text-[8px] text-muted">{character.modelVersion}</span>
-                <span
-                  className={`rounded-full px-1.5 py-0.5 text-[8px] font-medium ${CHARACTER_STATUS_STYLES[character.status]}`}
-                >
-                  {character.status}
-                </span>
-              </p>
-              <p className="mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-muted">
-                {character.externalId ?? "belum ada id"}
-                {character.externalId ? (
-                  <button
-                    type="button"
-                    onClick={() => copyId(character.externalId ?? "")}
-                    className="rounded border border-border px-1 text-[8px] hover:text-ink"
-                  >
-                    Copy
-                  </button>
-                ) : null}
-              </p>
-              {character.failReason ? (
-                <p className="mt-1 text-[10px] leading-relaxed text-danger">{character.failReason}</p>
-              ) : null}
-            </div>
-            <Button
-              variant="secondary"
-              size="sm"
-              loading={refreshCharacter.isPending && refreshCharacter.variables === character.id}
-              onClick={() =>
-                refreshCharacter.mutate(character.id, {
-                  onError: (error) => pushToast("error", error.message),
-                })
-              }
-            >
-              Refresh status
-            </Button>
-          </li>
-        ))}
-      </ul>
-    </article>
-  );
-}
 
 export function ProvidersView() {
   const providersQuery = useAdminProvidersQuery();
@@ -611,7 +416,6 @@ export function ProvidersView() {
             </div>
           </article>
         ))}
-        {providers.some((provider) => provider.code === "HIGGSFIELD") ? <SoulIdTuningCard /> : null}
       </div>
 
       <div className="mt-4 flex items-start gap-2 rounded-2xl border border-border bg-white/60 px-4 py-3 text-[11px] leading-relaxed text-muted">

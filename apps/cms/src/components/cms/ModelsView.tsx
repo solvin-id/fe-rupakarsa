@@ -659,7 +659,7 @@ export function ModelsView() {
             <Field
               label="Soul ID reference"
               htmlFor="model-soul-reference"
-              hint="Pilih karakter yang sudah selesai dilatih di Providers."
+              hint="Pilih karakter yang sudah selesai dilatih di panel proyek (Pre-context)."
             >
               <Select
                 id="model-soul-reference"
@@ -861,7 +861,7 @@ export function ModelsView() {
             <Field
               label="Soul ID reference"
               htmlFor="model-new-soul-reference"
-              hint="Pilih karakter yang sudah selesai dilatih di Providers."
+              hint="Pilih karakter yang sudah selesai dilatih di panel proyek (Pre-context)."
             >
               <Select
                 id="model-new-soul-reference"
