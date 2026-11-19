@@ -22,6 +22,7 @@ import {
 import { queryKeys } from "@rupakarsa/shared/lib/api/keys";
 import { formatDateTime, formatRelative, formatTokens } from "@rupakarsa/shared/lib/format";
 import { mediaGates } from "@rupakarsa/shared/lib/inputs";
+import { isVideoMedia } from "@rupakarsa/shared/lib/media";
 import { pickModel } from "@rupakarsa/shared/lib/models";
 import { effectivePromptLimit } from "@rupakarsa/shared/lib/prompt";
 import type { Generation, GenerationStatus, MediaCapability, MediaType } from "@rupakarsa/shared/lib/types";
@@ -605,14 +606,26 @@ export function StudioView({ folderId }: { folderId: string }) {
                 Hasil dibersihkan setelah masa retensi penyimpanan.
               </div>
             ) : detailTarget.status === "COMPLETED" && detailTarget.outputUrl ? (
-              <GenerationMediaPreview
-                url={detailTarget.outputUrl}
-                mediaType={detailTarget.mediaType}
-                mime={detailTarget.outputMime}
-                label={detailTarget.modelName}
-                controls
-                className="aspect-video w-full rounded-2xl bg-ink object-cover"
-              />
+              isVideoMedia(detailTarget.outputUrl, detailTarget.outputMime) ? (
+                <GenerationMediaPreview
+                  url={detailTarget.outputUrl}
+                  mediaType={detailTarget.mediaType}
+                  mime={detailTarget.outputMime}
+                  label={detailTarget.modelName}
+                  controls
+                  frameClassName="aspect-video w-full rounded-2xl bg-ink"
+                  className="size-full object-cover"
+                />
+              ) : (
+                <GenerationMediaPreview
+                  url={detailTarget.outputUrl}
+                  mediaType={detailTarget.mediaType}
+                  mime={detailTarget.outputMime}
+                  label={detailTarget.modelName}
+                  controls
+                  className="aspect-video w-full rounded-2xl bg-ink object-cover"
+                />
+              )
             ) : detailTarget.status === "COMPLETED" ? (
               <GradientArt variant="sunset" className="aspect-video w-full" rounded="rounded-2xl">
                 <div className="relative z-10 flex h-full items-center justify-center">

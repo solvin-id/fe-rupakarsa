@@ -18,6 +18,7 @@ export function GenerationMediaPreview({
   className,
   label,
   controls = false,
+  frameClassName,
 }: {
   url: string;
   mediaType: MediaType;
@@ -25,11 +26,20 @@ export function GenerationMediaPreview({
   className?: string;
   label: string;
   controls?: boolean;
+  frameClassName?: string;
 }) {
   const [failed, setFailed] = useState(false);
 
   if (isVideoMedia(url, mime)) {
-    return <BufferedVideo src={url} label={label} controls={controls} className={className} />;
+    return (
+      <BufferedVideo
+        src={url}
+        label={label}
+        controls={controls}
+        className={className}
+        frameClassName={frameClassName}
+      />
+    );
   }
 
   if (failed) {

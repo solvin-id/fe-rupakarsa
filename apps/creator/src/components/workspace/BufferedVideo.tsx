@@ -6,12 +6,15 @@ import { Loader2 } from "lucide-react";
 const STALL_TIMEOUT_MS = 4000;
 const MAX_RETRIES = 2;
 const MAX_FALLBACK_BYTES = 200 * 1024 * 1024;
+const OVERLAY_DELAY_MS = 400;
 
 interface BufferedVideoProps {
   src: string;
   label: string;
   controls?: boolean;
   className?: string;
+  /** Sizing + rounding of the clipped frame; the media element fills it. */
+  frameClassName?: string;
 }
 
 /**
@@ -19,7 +22,13 @@ interface BufferedVideoProps {
  * reports neither progress nor a recoverable error, so a stalled element retries twice and then
  * falls back to a plain fetch into a blob URL (which also covers a missing `Range` support).
  */
-export function BufferedVideo({ src, label, controls = false, className }: BufferedVideoProps) {
+export function BufferedVideo({
+  src,
+  label,
+  controls = false,
+  className,
+  frameClassName,
+}: BufferedVideoProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const stallTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retries = useRef(0);
@@ -30,6 +39,15 @@ export function BufferedVideo({ src, label, controls = false, className }: Buffe
   const [recovering, setRecovering] = useState(false);
   const [bufferedPercent, setBufferedPercent] = useState(0);
   const [loadPercent, setLoadPercent] = useState<number | null>(null);
+  const [ready, setReady] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(false);
+  const [loadedSrc, setLoadedSrc] = useState(src);
+  // A new source is a new load: reset during render instead of an effect that would cascade.
+  if (loadedSrc !== src) {
+    setLoadedSrc(src);
+    setReady(false);
+    setShowOverlay(false);
+  }
 
   const mediaSrc = blobUrl ?? (controls ? src : `${src}#t=0.1`);
 
@@ -113,9 +131,17 @@ export function BufferedVideo({ src, label, controls = false, className }: Buffe
     };
   }, [blobUrl, clearStallTimer]);
 
+  // A cached clip fires `loadeddata` before the eye registers; only a genuinely slow load earns
+  // the overlay, so reloads never announce a fetch that does not happen.
+  useEffect(() => {
+    if (ready || failed) return;
+    const timer = setTimeout(() => setShowOverlay(true), OVERLAY_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [ready, failed]);
+
   // Cards are thumbnails: a metadata-only element often reports no buffered range yet, so an
   // overlay there would spin forever. Only the dialog (controls) promises "loading".
-  const loading = recovering || (controls && bufferedPercent === 0 && !failed);
+  const loading = !failed && controls && (recovering || (showOverlay && !ready));
 
   if (failed) {
     return (
@@ -130,7 +156,7 @@ export function BufferedVideo({ src, label, controls = false, className }: Buffe
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden">
+    <div className={`relative h-full w-full overflow-hidden ${frameClassName ?? ""}`}>
       <video
         ref={videoRef}
         muted
@@ -150,8 +176,15 @@ export function BufferedVideo({ src, label, controls = false, className }: Buffe
         onWaiting={armStallTimer}
         onStalled={armStallTimer}
         onError={() => void recoverThroughFetch()}
-        onCanPlay={clearStallTimer}
-        onPlaying={clearStallTimer}
+        onLoadedData={() => setReady(true)}
+        onCanPlay={() => {
+          setReady(true);
+          clearStallTimer();
+        }}
+        onPlaying={() => {
+          setReady(true);
+          clearStallTimer();
+        }}
       />
 
       {loading ? (
