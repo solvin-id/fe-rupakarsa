@@ -214,11 +214,15 @@
               },
               "finalPromptMaxChars": {
                 "type": "integer"
+              },
+              "maxSceneChainScenes": {
+                "type": "integer"
               }
             },
             "required": [
               "planPromptMaxChars",
-              "finalPromptMaxChars"
+              "finalPromptMaxChars",
+              "maxSceneChainScenes"
             ]
           }
         },
@@ -741,6 +745,10 @@
           "description": {
             "type": "string"
           },
+          "characterReferenceId": {
+            "type": "string",
+            "nullable": true
+          },
           "createdAt": {
             "type": "string"
           },
@@ -754,6 +762,7 @@
           "userId",
           "name",
           "description",
+          "characterReferenceId",
           "createdAt",
           "updatedAt"
         ]
@@ -1262,6 +1271,80 @@
           "errorMessage",
           "estimateMs",
           "progressPercent"
+        ]
+      },
+      "AiCharacterReference": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "providerId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "modelVersion": {
+            "type": "string"
+          },
+          "externalId": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "NOT_READY",
+              "QUEUED",
+              "IN_PROGRESS",
+              "COMPLETED",
+              "FAILED"
+            ]
+          },
+          "thumbnailUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "failReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "inputImageUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdByUserId": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "completedAt": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "providerId",
+          "name",
+          "modelVersion",
+          "externalId",
+          "status",
+          "thumbnailUrl",
+          "failReason",
+          "inputImageUrls",
+          "createdByUserId",
+          "createdAt",
+          "updatedAt",
+          "completedAt"
         ]
       },
       "FolderContext": {
@@ -1885,13 +1968,17 @@
           },
           "finalPromptMaxChars": {
             "type": "integer"
+          },
+          "maxSceneChainScenes": {
+            "type": "integer"
           }
         },
         "required": [
           "generationsPerDayPerWorkspace",
           "planRequestsPerHourPerUser",
           "planPromptMaxChars",
-          "finalPromptMaxChars"
+          "finalPromptMaxChars",
+          "maxSceneChainScenes"
         ]
       },
       "StorageSettings": {
@@ -2340,80 +2427,6 @@
           "page",
           "limit",
           "stats"
-        ]
-      },
-      "AiCharacterReference": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "providerId": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "modelVersion": {
-            "type": "string"
-          },
-          "externalId": {
-            "type": "string",
-            "nullable": true
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "NOT_READY",
-              "QUEUED",
-              "IN_PROGRESS",
-              "COMPLETED",
-              "FAILED"
-            ]
-          },
-          "thumbnailUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "failReason": {
-            "type": "string",
-            "nullable": true
-          },
-          "inputImageUrls": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "createdByUserId": {
-            "type": "string",
-            "nullable": true
-          },
-          "createdAt": {
-            "type": "string"
-          },
-          "updatedAt": {
-            "type": "string"
-          },
-          "completedAt": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "providerId",
-          "name",
-          "modelVersion",
-          "externalId",
-          "status",
-          "thumbnailUrl",
-          "failReason",
-          "inputImageUrls",
-          "createdByUserId",
-          "createdAt",
-          "updatedAt",
-          "completedAt"
         ]
       }
     },
@@ -4032,6 +4045,11 @@
                   },
                   "description": {
                     "type": "string"
+                  },
+                  "characterReferenceId": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
                   }
                 }
               }
@@ -4215,9 +4233,14 @@
                     },
                     "default": []
                   },
-                  "continueFromPrevious": {
-                    "type": "boolean",
-                    "default": true
+                  "chainSceneIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 20,
+                    "default": []
                   }
                 },
                 "required": [
@@ -4339,9 +4362,14 @@
                       "aspectRatio"
                     ]
                   },
-                  "continueFromPrevious": {
-                    "type": "boolean",
-                    "default": true
+                  "chainSceneIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 20,
+                    "default": []
                   }
                 },
                 "required": [
@@ -4511,6 +4539,193 @@
           },
           "404": {
             "description": "Not found in this workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/characters": {
+      "get": {
+        "tags": [
+          "Creator characters"
+        ],
+        "responses": {
+          "200": {
+            "description": "Soul ID references of the active workspace, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AiCharacterReference"
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No active workspace",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Creator characters"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "modelVersion": {
+                    "type": "string",
+                    "enum": [
+                      "v1",
+                      "v2",
+                      "cinema"
+                    ],
+                    "default": "v1"
+                  },
+                  "imageAssetIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "minItems": 1,
+                    "maxItems": 10
+                  }
+                },
+                "required": [
+                  "name",
+                  "imageAssetIds"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Training queued",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiCharacterReference"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload or asset",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a workspace admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Provider not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Provider key missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/creator/characters/{id}/refresh": {
+      "post": {
+        "tags": [
+          "Creator characters"
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Reference state after the provider poll",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiCharacterReference"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a workspace admin",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Reference not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Provider rate limit",
             "content": {
               "application/json": {
                 "schema": {
@@ -6715,6 +6930,11 @@
                     "type": "integer",
                     "minimum": 200,
                     "maximum": 32000
+                  },
+                  "maxSceneChainScenes": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 10
                   }
                 },
                 "required": [
@@ -7400,141 +7620,6 @@
                   "items": {
                     "$ref": "#/components/schemas/AiCharacterReference"
                   }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "CMS Higgsfield"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 100
-                  },
-                  "modelVersion": {
-                    "type": "string",
-                    "enum": [
-                      "v1",
-                      "v2",
-                      "cinema"
-                    ],
-                    "default": "v1"
-                  },
-                  "imageUrls": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "format": "uri"
-                    },
-                    "minItems": 1,
-                    "maxItems": 100
-                  }
-                },
-                "required": [
-                  "name",
-                  "imageUrls"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Training queued",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AiCharacterReference"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid payload",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Provider key missing",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Provider rate limit",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/cms/higgsfield/characters/{id}/refresh": {
-      "post": {
-        "tags": [
-          "CMS Higgsfield"
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Reference state after the provider poll",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AiCharacterReference"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Reference not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Provider rate limit",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
